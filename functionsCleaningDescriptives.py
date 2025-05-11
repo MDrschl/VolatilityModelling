@@ -64,3 +64,48 @@ def plot_autocorrelogram(series, lags=20, title="", squared=False):
     plt.tight_layout()
     plt.show(block=False)
 
+import pandas as pd
+import numpy as np
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.stats.stattools import jarque_bera
+
+def test_distribution_diagnostics(series_dict, lags=20):
+    """
+    Performs Ljung-Box test for autocorrelation, McLeod-Li test on squared returns, 
+    and Jarque-Bera test for normality across return series.
+
+    Parameters:
+    - series_dict: dict with {label: return_series}
+    - lags: number of lags for Ljung-Box/McLeod-Li (default 20)
+
+    Returns:
+    - pd.DataFrame with test stats and p-values for each series
+    """
+    results = []
+
+    for label, series in series_dict.items():
+        series = series.dropna()
+        squared = series ** 2
+
+        # Ljung-Box
+        lb = acorr_ljungbox(series, lags=[lags], return_df=True)
+        lb_stat, lb_p = lb.iloc[0]['lb_stat'], lb.iloc[0]['lb_pvalue']
+
+        # McLeod-Li
+        ml = acorr_ljungbox(squared, lags=[lags], return_df=True)
+        ml_stat, ml_p = ml.iloc[0]['lb_stat'], ml.iloc[0]['lb_pvalue']
+
+        # Jarque-Bera
+        jb_stat, jb_p, _, _ = jarque_bera(series)
+
+        results.append({
+            "Series": label,
+            "Ljung-Box stat": lb_stat,
+            "Ljung-Box p": lb_p,
+            "McLeod-Li stat": ml_stat,
+            "McLeod-Li p": ml_p,
+            "Jarque-Bera stat": jb_stat,
+            "Jarque-Bera p": jb_p
+        })
+
+    return pd.DataFrame(results)

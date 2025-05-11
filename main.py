@@ -1,6 +1,12 @@
 import pandas as pd
 import numpy as np
-import functionsDataCleaning as dataFunc
+import functionsCleaningDescriptives as dataFunc
+import functionsResidualsAnalysis as funcRes
+import functionsUnivariate as funcUni
+
+###########
+# Data Loading, Preprocessing, Descriptive Statistics
+###########
 
 btc = dataFunc.load_close_series("data/BTCUSDT_1m.csv")
 eth = dataFunc.load_close_series("data/ETHUSDT_1m.csv")
@@ -44,9 +50,6 @@ for minutes, label in freqs.items():
 summary_all = pd.DataFrame(results)
 print(summary_all.round(3))
 
-
-
-
 vol_btc = dataFunc.daily_ann_vol(btc["Close"].dropna())
 vol_eth = dataFunc.daily_ann_vol(eth["Close"].dropna())
 
@@ -59,3 +62,34 @@ dataFunc.plot_autocorrelogram(btc_ret, squared=True, title="BTC Squared Return A
 
 dataFunc.plot_autocorrelogram(eth_ret, title="ETH Return Autocorrelogram")
 dataFunc.plot_autocorrelogram(eth_ret, squared=True, title="ETH Squared Return Autocorrelogram")
+
+all_returns = {}
+
+for minutes, label in freqs.items():
+    btc_resampled = btc["Close"].resample(f"{minutes}min").last().dropna()
+    eth_resampled = eth["Close"].resample(f"{minutes}min").last().dropna()
+    btc_ret_freq = btc_resampled.pct_change().dropna()
+    eth_ret_freq = eth_resampled.pct_change().dropna()
+
+    all_returns[f"{label} – BTC"] = btc_ret_freq
+    all_returns[f"{label} – ETH"] = eth_ret_freq
+
+diagnostics = dataFunc.test_distribution_diagnostics(all_returns)
+print(diagnostics.round(3))
+
+
+###########
+# Univariate Models: In Sample
+###########
+
+###########
+# Univariate Models: Out of Sample
+###########
+
+###########
+# Multivariate Models: In Sample
+###########
+
+###########
+# Multivariate Models: Out of Sample
+###########
