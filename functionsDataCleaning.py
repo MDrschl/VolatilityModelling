@@ -2,6 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import statsmodels.api as sm
+from statsmodels.tsa.stattools import acf
+
 
 def compute_stats(r):
     return {
@@ -39,17 +41,26 @@ def daily_ann_vol(ret_1m):
     vol = ret_1m.pct_change().groupby(ret_1m.index.date).std()
     return pd.Series(vol.values * np.sqrt(1440 * 252) * 100, index=pd.to_datetime(vol.index))
 
+
 def plot_autocorrelogram(series, lags=20, title="", squared=False):
     data = series ** 2 if squared else series
     T = len(data)
     conf_int = 1.96 / np.sqrt(T)
+    acf_vals = acf(data, nlags=lags, fft=True)
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    sm.graphics.tsa.plot_acf(data, lags=lags, alpha=None, ax=ax)
+    markerline, stemlines, baseline = ax.stem(range(len(acf_vals)), acf_vals)
+    plt.setp(markerline, markersize=4, marker='o', color='black')
+    plt.setp(stemlines, linewidth=1.2, color='black')
+    plt.setp(baseline, linewidth=0)
+
+    ax.axhline(y=0, linestyle='-', color='black', linewidth=0.5)
     ax.axhline(y=conf_int, linestyle='--', color='gray', linewidth=1)
     ax.axhline(y=-conf_int, linestyle='--', color='gray', linewidth=1)
+
     ax.set_title(title)
     ax.set_xlabel("Lags")
     ax.set_ylabel("Autocorrelation")
     plt.tight_layout()
     plt.show(block=False)
+
