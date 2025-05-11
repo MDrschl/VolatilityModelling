@@ -4,20 +4,7 @@ import numpy as np
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import acf
 
-
 def garch_corrected_acf_ci(residuals, lags=20, alpha=0.05):
-    """
-    Computes GARCH-corrected confidence intervals for sample autocorrelations.
-    
-    Parameters:
-    - residuals: array-like, residuals or demeaned returns
-    - lags: number of lags to include
-    - alpha: significance level (default = 0.05 for 95% CI)
-
-    Returns:
-    - acf_vals: np.ndarray of autocorrelations
-    - ci_bounds: np.ndarray of symmetric confidence bounds per lag
-    """
     residuals = np.asarray(residuals)
     T = len(residuals)
     eps = residuals - np.mean(residuals)
@@ -40,19 +27,28 @@ def garch_corrected_acf_ci(residuals, lags=20, alpha=0.05):
 
     return acf_vals, ci_bounds
 
-def plot_garch_corrected_acf(series, lags=20, title="GARCH-Corrected Autocorrelogram"):
-    acf_vals, ci_bounds = garch_corrected_acf_ci(series, lags=lags)
+def plot_garch_corrected_acf(fitted_model, lags=20, title="GARCH-Corrected ACF of Residuals"):
+    """
+    Plots GARCH-corrected ACF for standardized residuals of a fitted model.
+
+    Parameters:
+    - fitted_model: arch.univariate.base.ARCHModelResult
+    - lags: number of lags
+    - title: plot title
+    """
+    std_resid = fitted_model.resid / fitted_model.conditional_volatility
+    acf_vals, ci_bounds = garch_corrected_acf_ci(std_resid, lags=lags)
 
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.stem(range(len(acf_vals)), acf_vals, markerfmt='ko', basefmt=" ", linefmt='k-', bottom=0)
     ax.axhline(y=0, linestyle='-', color='black', linewidth=0.5)
 
     for lag in range(1, len(acf_vals)):
-        ax.axhline(y=ci_bounds[lag], linestyle='--', color='gray', linewidth=1)
-        ax.axhline(y=-ci_bounds[lag], linestyle='--', color='gray', linewidth=1)
+        ax.axhline(y=ci_bounds[lag], linestyle='--', color='gray')
+        ax.axhline(y=-ci_bounds[lag], linestyle='--', color='gray')
 
     ax.set_title(title)
     ax.set_xlabel("Lags")
     ax.set_ylabel("Autocorrelation")
     plt.tight_layout()
-    plt.show(block = False)
+    plt.show(block=False)

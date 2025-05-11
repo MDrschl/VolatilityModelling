@@ -82,8 +82,20 @@ print(diagnostics.round(3))
 # Univariate Models: In Sample
 ###########
 
-# ARCH
-# GARCH (p,q)
+returns = btc["Close"].resample("1D").last().pct_change().dropna()
+results_table, best_model = funcUni.fit_garch_models(returns, dist="t")
+print(results_table.sort_values("AIC").round(3))
+
+param_table, info_table = funcUni.summarize_garch_model(best_model)
+print("Model Parameters:")
+print(param_table)
+print("\nFit Statistics:")
+print(info_table)
+
+funcUni.plot_garch_residuals(best_model, title_prefix="BTC GARCH(1,3)")
+
+# Autocorrelogram with corrected 95 ci???
+
 # Threshold GARCH
 # Regime Switching
 
