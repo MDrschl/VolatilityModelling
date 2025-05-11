@@ -82,6 +82,11 @@ print(diagnostics.round(3))
 # Univariate Models: In Sample
 ###########
 
+# ARCH
+# GARCH (p,q)
+# Threshold GARCH
+# Regime Switching
+
 ###########
 # Univariate Models: Out of Sample
 ###########
@@ -89,6 +94,9 @@ print(diagnostics.round(3))
 ###########
 # Multivariate Models: In Sample
 ###########
+
+# VARMA-DCC-AGARCH
+# Regime Switching
 
 ###########
 # Multivariate Models: Out of Sample
