@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import functionsCleaningDescriptives as dataFunc
-import functionsResidualsAnalysis as funcRes
 import functionsUnivariate as funcUni
 
 ###########
@@ -91,8 +90,8 @@ btc_params, btc_info = funcUni.summarize_garch_model(btc_best_model)
 print("\nBTC Model Parameters:\n", btc_params)
 print("\nBTC Fit Statistics:\n", btc_info)
 
-funcRes.robust_acf_plot(btc_returns, title="BTC Return – Robust ACF")
-funcRes.robust_acf_plot(btc_best_model.resid / btc_best_model.conditional_volatility, title="BTC GARCH Residual – Robust ACF")
+funcUni.robust_acf_plot(btc_returns, title="BTC Return – Robust ACF")
+funcUni.robust_acf_plot(btc_best_model.resid / btc_best_model.conditional_volatility, title="BTC GARCH Residual – Robust ACF")
 
 
 # ETH
@@ -104,10 +103,9 @@ eth_params, eth_info = funcUni.summarize_garch_model(eth_best_model)
 print("\nETH Model Parameters:\n", eth_params)
 print("\nETH Fit Statistics:\n", eth_info)
 
-funcRes.robust_acf_plot(eth_returns, title="ETH Return – Robust ACF")
-funcRes.robust_acf_plot(eth_best_model.resid / eth_best_model.conditional_volatility, title="ETH GARCH Residual – Robust ACF")
+funcUni.robust_acf_plot(eth_returns, title="ETH Return – Robust ACF")
+funcUni.robust_acf_plot(eth_best_model.resid / eth_best_model.conditional_volatility, title="ETH GARCH Residual – Robust ACF")
 
-# Autocorrelogram with corrected 95 ci???
 
 # Threshold GARCH
 # Regime Switching
