@@ -82,17 +82,30 @@ print(diagnostics.round(3))
 # Univariate Models: In Sample
 ###########
 
-returns = btc["Close"].resample("1D").last().pct_change().dropna()
-results_table, best_model = funcUni.fit_garch_models(returns, dist="t")
-print(results_table.sort_values("AIC").round(3))
+# BTC
+btc_returns = btc["Close"].resample("1D").last().pct_change().dropna()
+btc_results, btc_best_model = funcUni.fit_garch_models(btc_returns, dist="t")
+print("BTC GARCH Model Comparison:\n", btc_results.sort_values("AIC").round(3))
 
-param_table, info_table = funcUni.summarize_garch_model(best_model)
-print("Model Parameters:")
-print(param_table)
-print("\nFit Statistics:")
-print(info_table)
+btc_params, btc_info = funcUni.summarize_garch_model(btc_best_model)
+print("\nBTC Model Parameters:\n", btc_params)
+print("\nBTC Fit Statistics:\n", btc_info)
 
-funcUni.plot_garch_residuals(best_model, title_prefix="BTC GARCH(1,3)")
+funcRes.robust_acf_plot(btc_returns, title="BTC Return – Robust ACF")
+funcRes.robust_acf_plot(btc_best_model.resid / btc_best_model.conditional_volatility, title="BTC GARCH Residual – Robust ACF")
+
+
+# ETH
+eth_returns = eth["Close"].resample("1D").last().pct_change().dropna()
+eth_results, eth_best_model = funcUni.fit_garch_models(eth_returns, dist="t")
+print("\nETH GARCH Model Comparison:\n", eth_results.sort_values("AIC").round(3))
+
+eth_params, eth_info = funcUni.summarize_garch_model(eth_best_model)
+print("\nETH Model Parameters:\n", eth_params)
+print("\nETH Fit Statistics:\n", eth_info)
+
+funcRes.robust_acf_plot(eth_returns, title="ETH Return – Robust ACF")
+funcRes.robust_acf_plot(eth_best_model.resid / eth_best_model.conditional_volatility, title="ETH GARCH Residual – Robust ACF")
 
 # Autocorrelogram with corrected 95 ci???
 
