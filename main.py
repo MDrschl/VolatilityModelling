@@ -6,13 +6,22 @@ import functionsUnivariate as funcUni
 ###########
 # Data Loading, Preprocessing, Descriptive Statistics
 ###########
+btc_full = dataFunc.load_close_series("data/BTCUSDT_1m.csv").sort_index()
+eth_full = dataFunc.load_close_series("data/ETHUSDT_1m.csv").sort_index()
 
-btc = dataFunc.load_close_series("data/BTCUSDT_1m.csv")
-eth = dataFunc.load_close_series("data/ETHUSDT_1m.csv")
+split_date = "2023-10-31"
+
+# Train set: up to and including 2023-10-31
+btc_train = btc_full.loc[:split_date]
+eth_train = eth_full.loc[:split_date]
+
+# Test set: after 2023-10-31
+btc_test = btc_full.loc[split_date:]
+eth_test = eth_full.loc[split_date:]
 
 # Resample to daily prices and returns
-btc_daily = btc["Close"].resample("1D").last().dropna()
-eth_daily = eth["Close"].resample("1D").last().dropna()
+btc_daily = btc_full["Close"].resample("1D").last().dropna()
+eth_daily = eth_full["Close"].resample("1D").last().dropna()
 btc_ret = btc_daily.pct_change().dropna()
 eth_ret = eth_daily.pct_change().dropna()
 
@@ -33,14 +42,14 @@ freqs = {
 results = []
 
 for minutes, label in freqs.items():
-    btc_resampled = btc["Close"].resample(f"{minutes}min").last().dropna()
+    btc_resampled = btc_full["Close"].resample(f"{minutes}min").last().dropna()
     btc_ret_freq = btc_resampled.pct_change().dropna()
     btc_ret_freq.name = minutes
     btc_stats = dataFunc.compute_stats(btc_ret_freq)
     results.append(pd.Series(btc_stats, name=f"{label} return – BTC"))
 
 for minutes, label in freqs.items():
-    eth_resampled = eth["Close"].resample(f"{minutes}min").last().dropna()
+    eth_resampled = eth_full["Close"].resample(f"{minutes}min").last().dropna()
     eth_ret_freq = eth_resampled.pct_change().dropna()
     eth_ret_freq.name = minutes
     eth_stats = dataFunc.compute_stats(eth_ret_freq)
@@ -49,8 +58,8 @@ for minutes, label in freqs.items():
 summary_all = pd.DataFrame(results)
 print(summary_all.round(3))
 
-vol_btc = dataFunc.daily_ann_vol(btc["Close"].dropna())
-vol_eth = dataFunc.daily_ann_vol(eth["Close"].dropna())
+vol_btc = dataFunc.daily_ann_vol(btc_full["Close"].dropna())
+vol_eth = dataFunc.daily_ann_vol(eth_full["Close"].dropna())
 
 # Daily annualized volatility
 dataFunc.plot_series({"BTC": vol_btc, "ETH": vol_eth}, "Daily Annualized Volatility (from 1-Minute Data)", "Volatility (%)")
@@ -65,8 +74,8 @@ dataFunc.plot_autocorrelogram(eth_ret, squared=True, title="ETH Squared Return A
 all_returns = {}
 
 for minutes, label in freqs.items():
-    btc_resampled = btc["Close"].resample(f"{minutes}min").last().dropna()
-    eth_resampled = eth["Close"].resample(f"{minutes}min").last().dropna()
+    btc_resampled = btc_full["Close"].resample(f"{minutes}min").last().dropna()
+    eth_resampled = eth_full["Close"].resample(f"{minutes}min").last().dropna()
     btc_ret_freq = btc_resampled.pct_change().dropna()
     eth_ret_freq = eth_resampled.pct_change().dropna()
 
@@ -82,33 +91,36 @@ print(diagnostics.round(3))
 ###########
 
 # BTC
-btc_returns = btc["Close"].resample("1D").last().pct_change().dropna()
-btc_results, btc_best_model = funcUni.fit_garch_models(btc_returns, dist="t")
+btc_returns_train = btc_train["Close"].resample("1D").last().pct_change().dropna()
+btc_results, btc_best_model = funcUni.fit_garch_models(btc_returns_train, dist="t")
 print("BTC GARCH Model Comparison:\n", btc_results.sort_values("AIC").round(3))
 
 btc_params, btc_info = funcUni.summarize_garch_model(btc_best_model)
 print("\nBTC Model Parameters:\n", btc_params)
 print("\nBTC Fit Statistics:\n", btc_info)
 
-funcUni.robust_acf_plot(btc_returns, title="BTC Return – Robust ACF")
+funcUni.robust_acf_plot(btc_returns_train, title="BTC Return – Robust ACF")
 funcUni.robust_acf_plot(btc_best_model.resid / btc_best_model.conditional_volatility, title="BTC GARCH Residual – Robust ACF")
 
 
 # ETH
-eth_returns = eth["Close"].resample("1D").last().pct_change().dropna()
-eth_results, eth_best_model = funcUni.fit_garch_models(eth_returns, dist="t")
+eth_returns_train = eth_train["Close"].resample("1D").last().pct_change().dropna()
+eth_results, eth_best_model = funcUni.fit_garch_models(eth_returns_train, dist="t")
 print("\nETH GARCH Model Comparison:\n", eth_results.sort_values("AIC").round(3))
 
 eth_params, eth_info = funcUni.summarize_garch_model(eth_best_model)
 print("\nETH Model Parameters:\n", eth_params)
 print("\nETH Fit Statistics:\n", eth_info)
 
-funcUni.robust_acf_plot(eth_returns, title="ETH Return – Robust ACF")
+funcUni.robust_acf_plot(eth_returns_train, title="ETH Return – Robust ACF")
 funcUni.robust_acf_plot(eth_best_model.resid / eth_best_model.conditional_volatility, title="ETH GARCH Residual – Robust ACF")
 
 
 # Threshold GARCH
 # Regime Switching
+
+# Train test split: 31.10.2023
+# Hourly, 6 hour frequency
 
 ###########
 # Univariate Models: Out of Sample
