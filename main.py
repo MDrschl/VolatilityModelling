@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 import functionsCleaningDescriptives as dataFunc
 import functionsUnivariate as funcUni
 
@@ -94,34 +95,49 @@ print(diagnostics.round(3))
 # Univariate Models: In Sample
 ###########
 
-# BTC
-btc_returns_train = btc_train["Close"].resample("1D").last().pct_change().dropna()
-funcUni.robust_acf_plot(btc_returns_train, title="BTC Return – Robust ACF")
+# Fit ARCH and GARCH models on 1-Day, 1-Hour and 6-Hour frequency
 
-btc_results, btc_best_model = funcUni.fit_garch_models(btc_returns_train, dist="t")
-print("BTC GARCH Model Comparison:\n", btc_results.sort_values("AIC").round(3))
+cryptocurrency = {
+    "BTC": btc_train,
+    "ETH": eth_train
+}
 
-btc_params, btc_info = funcUni.summarize_garch_model(btc_best_model)
-print("\nBTC Model Parameters:\n", btc_params)
-print("\nBTC Fit Statistics:\n", btc_info)
+frequency = {
+    "1D": "Daily",
+    "1H": "Hourly",
+    "6H": "6-Hour"
+}
+
+for crypto, data in cryptocurrency.items():
+    for freq, label in frequency.items():
+
+        print(f"\n\n# {label} frequency analysis for {crypto}")
+        print("-" * 50)
+
+        # Extract return at specified frequency
+        data_returns_freq = data["Close"].resample(freq).last().pct_change().dropna()
+
+        # Plot robust ACF and PACF at specified frequency
+        funcUni.robust_acf_plot(data_returns_freq, title=f"{crypto} Return – Robust ACF ({label} frequency)")
+        funcUni.robust_pacf_plot(data_returns_freq,title=f"{crypto} Return – Robust PACF ({label} frequency)")
+
+        # Fit ARCH and GARCH models and rank performance
+        results, best_model = funcUni.fit_garch_models(data_returns_freq, dist="t")
+        print(f"{crypto} GARCH Model Comparison ({label} frequency):\n", results.sort_values("AIC").round(3))
+
+        # Return summary statistics on models
+        params, info = funcUni.summarize_garch_model(best_model)
+        print(f"\n{crypto} Model Parameters:\n", params)
+        print(f"\n{crypto} Fit Statistics:\n", info)
 
 
-
-# ETH
-eth_returns_train = eth_train["Close"].resample("1D").last().pct_change().dropna()
-funcUni.robust_acf_plot(eth_returns_train, title="ETH Return – Robust ACF")
-
-eth_results, eth_best_model = funcUni.fit_garch_models(eth_returns_train, dist="t")
-print("\nETH GARCH Model Comparison:\n", eth_results.sort_values("AIC").round(3))
-
-eth_params, eth_info = funcUni.summarize_garch_model(eth_best_model)
-print("\nETH Model Parameters:\n", eth_params)
-print("\nETH Fit Statistics:\n", eth_info)
 
 # Threshold GARCH
-# Regime Switching
 
-# Residual analysis: Robust ACF, Robust LB test
+# Include PACF function
+
+
+# Regime Switching
 
 # Hourly, 6 hour frequency
 
@@ -139,3 +155,9 @@ print("\nETH Fit Statistics:\n", eth_info)
 ###########
 # Multivariate Models: Out of Sample
 ###########
+
+
+# Robust acf for codnitional mean, use robust
+# Residuals univariate fitting 
+#   Check flat bounds
+# We already icnorporated hetehorskdeasityn when wemnestimaten arma model

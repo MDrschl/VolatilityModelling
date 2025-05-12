@@ -36,7 +36,7 @@ def plot_series(series_dict, title, ylabel):
     plt.show(block = False)
 
 
-    # Intraday volatility → daily annualized
+# Intraday volatility → daily annualized
 def daily_ann_vol(ret_1m):
     vol = ret_1m.pct_change().groupby(ret_1m.index.date).std()
     return pd.Series(vol.values * np.sqrt(1440 * 252) * 100, index=pd.to_datetime(vol.index))
