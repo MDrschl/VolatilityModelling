@@ -92,6 +92,8 @@ print(diagnostics.round(3))
 
 # BTC
 btc_returns_train = btc_train["Close"].resample("1D").last().pct_change().dropna()
+funcUni.robust_acf_plot(btc_returns_train, title="BTC Return – Robust ACF")
+
 btc_results, btc_best_model = funcUni.fit_garch_models(btc_returns_train, dist="t")
 print("BTC GARCH Model Comparison:\n", btc_results.sort_values("AIC").round(3))
 
@@ -99,12 +101,12 @@ btc_params, btc_info = funcUni.summarize_garch_model(btc_best_model)
 print("\nBTC Model Parameters:\n", btc_params)
 print("\nBTC Fit Statistics:\n", btc_info)
 
-funcUni.robust_acf_plot(btc_returns_train, title="BTC Return – Robust ACF")
-funcUni.robust_acf_plot(btc_best_model.resid / btc_best_model.conditional_volatility, title="BTC GARCH Residual – Robust ACF")
 
 
 # ETH
 eth_returns_train = eth_train["Close"].resample("1D").last().pct_change().dropna()
+funcUni.robust_acf_plot(eth_returns_train, title="ETH Return – Robust ACF")
+
 eth_results, eth_best_model = funcUni.fit_garch_models(eth_returns_train, dist="t")
 print("\nETH GARCH Model Comparison:\n", eth_results.sort_values("AIC").round(3))
 
@@ -112,14 +114,9 @@ eth_params, eth_info = funcUni.summarize_garch_model(eth_best_model)
 print("\nETH Model Parameters:\n", eth_params)
 print("\nETH Fit Statistics:\n", eth_info)
 
-funcUni.robust_acf_plot(eth_returns_train, title="ETH Return – Robust ACF")
-funcUni.robust_acf_plot(eth_best_model.resid / eth_best_model.conditional_volatility, title="ETH GARCH Residual – Robust ACF")
-
-
 # Threshold GARCH
 # Regime Switching
 
-# Train test split: 31.10.2023
 # Hourly, 6 hour frequency
 
 ###########
