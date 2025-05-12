@@ -198,3 +198,81 @@ def robust_acf_plot(x, max_lag=None, title="Robust ACF"):
 
     plt.tight_layout()
     plt.show(block=False)
+
+
+def robust_pacf_plot(x, max_lag=None, title="Robust PACF"):
+    """
+    Plot robust partial autocorrelation function with robust confidence intervals.
+    """
+    from statsmodels.tsa.stattools import pacf
+    
+    x = np.asarray(x)
+    n = len(x)
+    if max_lag is None:
+        max_lag = int(min(10 * np.log10(n), n - 1))
+    
+    # Calculate PACF using statsmodels (more accurate)
+    pacf_vals = pacf(x, nlags=max_lag, method='ywmle')[1:]  # Exclude lag 0
+    
+    # Calculate robust variances
+    x_centered = x - np.mean(x)
+    x2 = x**2
+    gamma0 = np.sum(x_centered**2) / n
+    gamma0_sq = gamma0**2
+    
+    def gamma(x, h):
+        x_c = x - np.mean(x)
+        h = abs(h)
+        return np.sum(x_c[:n-h] * x_c[h:]) / n
+    
+    # Standard variance for PACF
+    standard_var = 1.0 / n
+    
+    # Robust variance adjustment
+    kurtosis_factor = gamma(x2, 0) / gamma0_sq - 1
+    variances = np.ones(max_lag) * standard_var * (1 + kurtosis_factor)
+    
+    # Standard CI
+    standard_ci = 1.96 * np.sqrt(standard_var)
+    
+    # Robust CI
+    robust_bands = 1.96 * np.sqrt(variances)
+    lower_robust = -robust_bands
+    upper_robust = robust_bands
+    
+    # Plotting boundaries
+    minval = 1.2 * min(min(pacf_vals), min(lower_robust), -standard_ci)
+    maxval = 1.2 * max(max(pacf_vals), max(upper_robust), standard_ci)
+    
+    # Plotting
+    fig, ax = plt.subplots(figsize=(10, 4))
+    lags = range(1, max_lag + 1)
+    
+    # Vertical lines and dots
+    for lag, val in zip(lags, pacf_vals):
+        ax.vlines(lag, 0, val, color='black', linewidth=1)
+    ax.plot(lags, pacf_vals, 'ko', markersize=4)
+    
+    # Robust CI
+    ax.plot(lags, upper_robust, linestyle='--', color='gray', linewidth=1)
+    ax.plot(lags, lower_robust, linestyle='--', color='gray', linewidth=1)
+    
+    # Standard CI
+    ax.axhline(standard_ci, linestyle='--', color='red', linewidth=1)
+    ax.axhline(-standard_ci, linestyle='--', color='red', linewidth=1)
+    
+    ax.axhline(0, color='black', linewidth=0.5)
+    ax.set_xlim(0.5, max_lag + 0.5)
+    ax.set_ylim(minval, maxval)
+    ax.set_xticks(np.arange(1, max_lag + 1))
+    ax.set_xlabel("Lag")
+    ax.set_ylabel("Partial Autocorrelation")
+    ax.set_title(title)
+    ax.plot([], [], 'k--', label='Robust 95% CI')
+    ax.plot([], [], 'r--', label='Standard 95% CI')
+    ax.legend(loc='upper right')
+    
+    plt.tight_layout()
+    plt.show(block=False)
+    
+    return pacf_vals

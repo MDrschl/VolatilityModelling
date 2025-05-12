@@ -113,8 +113,9 @@ for crypto, data in cryptocurrency.items():
         # Extract return at specified frequency
         data_returns_freq = data["Close"].resample(freq).last().pct_change().dropna()
 
-        # Plot robust ACF at specified frequency
+        # Plot robust ACF and PACF at specified frequency
         funcUni.robust_acf_plot(data_returns_freq, title=f"{crypto} Return – Robust ACF ({label} frequency)")
+        funcUni.robust_pacf_plot(data_returns_freq,title=f"{crypto} Return – Robust PACF ({label} frequency)")
 
         # Fit ARCH and GARCH models and rank performance
         results, best_model = funcUni.fit_garch_models(data_returns_freq, dist="t")
@@ -124,6 +125,7 @@ for crypto, data in cryptocurrency.items():
         params, info = funcUni.summarize_garch_model(best_model)
         print(f"\n{crypto} Model Parameters:\n", params)
         print(f"\n{crypto} Fit Statistics:\n", info)
+
 
 
 # Threshold GARCH
