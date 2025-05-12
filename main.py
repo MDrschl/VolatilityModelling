@@ -71,6 +71,7 @@ dataFunc.plot_autocorrelogram(btc_ret, squared=True, title="BTC Squared Return A
 dataFunc.plot_autocorrelogram(eth_ret, title="ETH Return Autocorrelogram")
 dataFunc.plot_autocorrelogram(eth_ret, squared=True, title="ETH Squared Return Autocorrelogram")
 
+# Diagnostics
 all_returns = {}
 
 for minutes, label in freqs.items():
@@ -85,6 +86,9 @@ for minutes, label in freqs.items():
 diagnostics = dataFunc.test_distribution_diagnostics(all_returns)
 print(diagnostics.round(3))
 
+# Robust Diagnostics
+
+# LM test
 
 ###########
 # Univariate Models: In Sample
@@ -116,6 +120,8 @@ print("\nETH Fit Statistics:\n", eth_info)
 
 # Threshold GARCH
 # Regime Switching
+
+# Residual analysis: Robust ACF, Robust LB test
 
 # Hourly, 6 hour frequency
 
