@@ -5,12 +5,6 @@ import functionsCleaningDescriptives as dataFunc
 import functionsUnivariate as funcUni
 import matplotlib.pyplot as plt
 
-
-from DCC_GARCH.GARCH.GARCH import GARCH
-from DCC_GARCH.GARCH.GARCH_loss import garch_loss_gen
-from DCC_GARCH.DCC.DCC import DCC
-from DCC_GARCH.DCC.DCC_loss import dcc_loss_gen
-
 ###########
 # Data Loading, Preprocessing, Descriptive Statistics
 ###########
@@ -22,6 +16,9 @@ split_date = "2023-10-31"
 # Train set: up to and including 2023-10-31
 btc_train = btc_full.loc[:split_date]
 eth_train = eth_full.loc[:split_date]
+
+btc_ret = btc_train["Close"].resample("1D").last().pct_change().dropna()
+eth_ret = eth_train["Close"].resample("1D").last().pct_change().dropna()
 
 returns_df = pd.concat([btc_ret, eth_ret], axis=1).dropna()
 returns_df.columns = ["BTC", "ETH"]
@@ -170,98 +167,6 @@ for crypto, data in cryptocurrency.items():
 ###########
 # Multivariate Models: In Sample
 ###########
-
-for freq, label in frequency.items():
-    print(f"\n--- Topaceminem DCC-GARCH on {label} data ---")
-
-    # Step 1: Resample and compute log returns
-    btc = np.log(btc_train["Close"].resample(freq).last()).diff().dropna()
-    eth = np.log(eth_train["Close"].resample(freq).last()).diff().dropna()
-
-    # Step 2: Align both series
-    combined = pd.concat([btc, eth], axis=1).dropna()
-    combined.columns = ["BTC", "ETH"]
-
-    # Step 3: Fit univariate GARCH for each asset
-    btc_model = GARCH(1, 1)
-    btc_model.set_loss(garch_loss_gen(1, 1))
-    btc_model.set_max_itr(50)
-    btc_model.fit(combined["BTC"])
-
-    eth_model = GARCH(1, 1)
-    eth_model.set_loss(garch_loss_gen(1, 1))
-    eth_model.set_max_itr(50)
-    eth_model.fit(combined["ETH"])
-
-    # Step 4: Get standardized residuals
-    btc_sigma = btc_model.sigma(combined["BTC"])
-    eth_sigma = eth_model.sigma(combined["ETH"])
-    epsilon = np.array([
-        combined["BTC"] / btc_sigma,
-        combined["ETH"] / eth_sigma
-    ])
-
-    # Step 5: Fit DCC model on standardized residuals
-    model = DCC()
-    model.set_loss(dcc_loss_gen())
-    model.fit(epsilon)
-
-    # Step 6: Plot dynamic correlation
-    dynamic_corr = model.corr[:, 0, 1]
-    plt.figure(figsize=(12, 5))
-    plt.plot(combined.index[1:], dynamic_corr)  # Skip first obs due to lag
-    plt.title(f'Dynamic Correlation BTC-ETH ({label})')
-    plt.xlabel('Date')
-    plt.ylabel('Correlation')
-    plt.grid(True)
-    plt.show()
-
-# --- Topaceminem DCC-GARCH on Daily data ---
-
-# Step 1: Resample and compute log returns
-freq = '1D'
-label = 'Daily'
-btc = np.log(btc_train["Close"].resample(freq).last()).diff().dropna()
-eth = np.log(eth_train["Close"].resample(freq).last()).diff().dropna()
-
-# Step 2: Align both series
-combined = pd.concat([btc, eth], axis=1).dropna()
-combined.columns = ["BTC", "ETH"]
-
-# Step 3: Fit univariate GARCH for each asset
-btc_model = GARCH(1, 1)
-btc_model.set_loss(garch_loss_gen(1, 1))
-btc_model.set_max_itr(50)
-btc_model.fit(combined["BTC"])
-btc_model.get_theta()
-eth_model = GARCH(1, 1)
-eth_model.set_loss(garch_loss_gen(1, 1))
-eth_model.set_max_itr(50)
-eth_model.fit(combined["ETH"])
-eth_model.get_theta()
-
-# Step 4: Get standardized residuals
-btc_sigma = btc_model.sigma(combined["BTC"])
-eth_sigma = eth_model.sigma(combined["ETH"])
-epsilon = np.array([
-    combined["BTC"] / btc_sigma,
-    combined["ETH"] / eth_sigma
-])
-
-# Step 5: Fit DCC model on standardized residuals
-model = DCC()
-model.set_loss(dcc_loss_gen())
-model.fit(epsilon)
-
-plt.figure(figsize=(12, 5))
-plt.plot(combined.index[1:], dynamic_corr)  # Skip first obs due to lag
-plt.title(f'Dynamic Correlation BTC-ETH ({label})')
-plt.xlabel('Date')
-plt.ylabel('Correlation')
-plt.grid(True)
-plt.show()
-
-
 
 # VARMA-DCC-AGARCH
 # Regime Switching
