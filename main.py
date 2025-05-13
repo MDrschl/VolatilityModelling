@@ -104,8 +104,9 @@ cryptocurrency = {
 
 frequency = {
     "1D": "Daily",
-    "1H": "Hourly",
-    "6H": "6-Hour"
+    "6H": "6-Hour",
+    "1H": "Hourly"
+    
 }
 
 for crypto, data in cryptocurrency.items():
@@ -119,7 +120,7 @@ for crypto, data in cryptocurrency.items():
 
         # Plot robust ACF and PACF at specified frequency
         funcUni.robust_acf_plot(data_returns_freq, title=f"{crypto} Return – Robust ACF ({label} frequency)")
-        funcUni.robust_pacf_plot(data_returns_freq,title=f"{crypto} Return – Robust PACF ({label} frequency)")
+        funcUni.robust_pacf_plot(data_returns_freq, title=f"{crypto} Return – Robust PACF ({label} frequency)")
 
         # Fit ARCH and GARCH models and rank performance
         results, best_model = funcUni.fit_garch_models(data_returns_freq, dist="t")
@@ -129,6 +130,18 @@ for crypto, data in cryptocurrency.items():
         params, info = funcUni.summarize_garch_model(best_model)
         print(f"\n{crypto} Model Parameters:\n", params)
         print(f"\n{crypto} Fit Statistics:\n", info)
+
+        # Residual plots (Raw, Squared, and Standardized)
+        funcUni.plot_garch_residuals(best_model, title_prefix=f"{crypto} Residuals ({label})")
+
+        # Residual ACF (raw and squared)
+        dataFunc.plot_autocorrelogram(best_model.resid.dropna(), title=f"{crypto} Residual ACF – {label}")
+        dataFunc.plot_autocorrelogram(best_model.resid.dropna(), squared=True, title=f"{crypto} Squared Residual ACF – {label}")
+
+        # Residual diagnostics table
+        diagnostics = funcUni.garch_residual_diagnostics(best_model)
+        print(f"\n{crypto} Residual Diagnostics:\n", diagnostics)
+
 
 
 
@@ -160,4 +173,4 @@ for crypto, data in cryptocurrency.items():
 # Robust acf for codnitional mean, use robust
 # Residuals univariate fitting 
 #   Check flat bounds
-# We already icnorporated hetehorskdeasityn when wemnestimaten arma model
+# We already icnorporated hetehorskdeasityn when wemnestimaten garch model

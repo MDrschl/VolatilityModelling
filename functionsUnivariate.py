@@ -137,6 +137,49 @@ def summarize_garch_model(fitted_model):
     })
 
     return param_table.round(4), info.round(4)
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.stats.stattools import jarque_bera
+
+def garch_residual_diagnostics(fitted_model, lags=20):
+    """
+    Calculates residual diagnostics for a fitted GARCH model.
+    
+    Includes:
+    - Ljung-Box test for autocorrelation of residuals
+    - McLeod-Li test for autocorrelation of squared residuals
+    - Jarque-Bera test for normality
+
+    Parameters:
+    - fitted_model: result from arch_model(...).fit()
+    - lags: number of lags to test
+
+    Returns:
+    - pd.DataFrame with test statistics and p-values
+    """
+    resid = fitted_model.resid.dropna()
+    sq_resid = resid ** 2
+
+    # Ljung-Box test on residuals
+    lb_test = acorr_ljungbox(resid, lags=[lags], return_df=True)
+    lb_stat = lb_test["lb_stat"].iloc[0]
+    lb_p = lb_test["lb_pvalue"].iloc[0]
+
+    # McLeod-Li test on squared residuals
+    ml_test = acorr_ljungbox(sq_resid, lags=[lags], return_df=True)
+    ml_stat = ml_test["lb_stat"].iloc[0]
+    ml_p = ml_test["lb_pvalue"].iloc[0]
+
+    # Jarque-Bera test on residuals
+    jb_stat, jb_p, _, _ = jarque_bera(resid)
+
+    return pd.DataFrame({
+        "Ljung-Box stat": [lb_stat],
+        "Ljung-Box p": [lb_p],
+        "McLeod-Li stat": [ml_stat],
+        "McLeod-Li p": [ml_p],
+        "Jarque-Bera stat": [jb_stat],
+        "Jarque-Bera p": [jb_p]
+    }).round(4)
 
 
 def robust_acf_plot(x, max_lag=None, title="Robust ACF"):
