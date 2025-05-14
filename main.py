@@ -5,7 +5,6 @@ import functionsCleaningDescriptives as dataFunc
 import functionsUnivariate as funcUni
 import matplotlib.pyplot as plt
 
-
 from DCC_GARCH.GARCH.GARCH import GARCH
 from DCC_GARCH.GARCH.GARCH_loss import garch_loss_gen
 from DCC_GARCH.DCC.DCC import DCC
@@ -19,6 +18,12 @@ eth_full = dataFunc.load_close_series("data/ETHUSDT_1m.csv").sort_index()
 
 split_date = "2023-10-31"
 
+# Resample to daily prices and returns
+btc_daily = btc_full["Close"].resample("1D").last().dropna()
+eth_daily = eth_full["Close"].resample("1D").last().dropna()
+btc_ret = btc_daily.pct_change().dropna()
+eth_ret = eth_daily.pct_change().dropna()
+
 # Train set: up to and including 2023-10-31
 btc_train = btc_full.loc[:split_date]
 eth_train = eth_full.loc[:split_date]
@@ -30,12 +35,6 @@ returns_df.to_csv("train_returns.csv")
 # Test set: after 2023-10-31
 btc_test = btc_full.loc[split_date:]
 eth_test = eth_full.loc[split_date:]
-
-# Resample to daily prices and returns
-btc_daily = btc_full["Close"].resample("1D").last().dropna()
-eth_daily = eth_full["Close"].resample("1D").last().dropna()
-btc_ret = btc_daily.pct_change().dropna()
-eth_ret = eth_daily.pct_change().dropna()
 
 # Daily prices
 dataFunc.plot_series({"BTC": btc_daily, "ETH": eth_daily}, "Daily Close Price", "Price (USDT)")
@@ -106,7 +105,8 @@ print(diagnostics.round(3))
 # Univariate Models: In Sample
 ###########
 
-# Fit ARCH and GARCH models on 1-Day, 1-Hour and 6-Hour frequency
+
+# Fit ARCH, GARCH, and TGARCH models on 1-Day, 1-Hour and 6-Hour frequency
 
 cryptocurrency = {
     "BTC": btc_train,
@@ -129,7 +129,7 @@ for crypto, data in cryptocurrency.items():
         # Extract return at specified frequency
         data_returns_freq = data["Close"].resample(freq).last().pct_change().dropna()
 
-        # Fit ARCH and GARCH models and rank performance
+        # Fit ARCH, GARCH and EGARCH models and rank performance
         results, best_model = funcUni.fit_garch_models(data_returns_freq, dist="t")
         print(f"{crypto} GARCH Model Comparison ({label} frequency):\n", results.sort_values("AIC").round(3))
 
@@ -151,17 +151,11 @@ for crypto, data in cryptocurrency.items():
 
 
 
-
-
-
-# Threshold GARCH
-
-# Include PACF function
-
-
 # Regime Switching
 
-# Hourly, 6 hour frequency
+
+
+
 
 ###########
 # Univariate Models: Out of Sample

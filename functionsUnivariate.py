@@ -3,7 +3,7 @@ import numpy as np
 from arch import arch_model
 import matplotlib.pyplot as plt
 
-def fit_garch_models(returns, model_name="Series", dist="normal", max_order=3):
+def fit_garch_models(returns, model_name="Series", dist="normal", max_order=3, ARCH=True, GARCH=True, EGARCH=True):
     """
     Fits ARCH(p) and GARCH(p,q) models for p, q in 1..max_order and finds best model by AIC.
     
@@ -22,37 +22,13 @@ def fit_garch_models(returns, model_name="Series", dist="normal", max_order=3):
     best_aic = np.inf  # ← initialize this
 
     # ARCH(p)
-    for p in range(1, max_order + 1):
-        try:
-            model = arch_model(returns, vol='GARCH', p=p, q=0, dist=dist, rescale=True)
-            res = model.fit(disp="off")
-            results.append({
-                "Model": f"ARCH({p})",
-                "Log-Likelihood": res.loglikelihood,
-                "AIC": res.aic,
-                "BIC": res.bic,
-                "Params": res.params.to_dict()
-            })
-            if res.aic < best_aic:
-                best_aic = res.aic
-                best_model = res
-        except Exception as e:
-            results.append({
-                "Model": f"ARCH({p})",
-                "Log-Likelihood": None,
-                "AIC": None,
-                "BIC": None,
-                "Params": str(e)
-            })
-
-    # GARCH(p,q)
-    for p in range(1, max_order + 1):
-        for q in range(1, max_order + 1):
+    if ARCH:
+        for p in range(1, max_order + 1):
             try:
-                model = arch_model(returns, vol='GARCH', p=p, q=q, dist=dist, rescale=True)
+                model = arch_model(returns, vol='GARCH', p=p, q=0, dist=dist, rescale=True)
                 res = model.fit(disp="off")
                 results.append({
-                    "Model": f"GARCH({p},{q})",
+                    "Model": f"ARCH({p})",
                     "Log-Likelihood": res.loglikelihood,
                     "AIC": res.aic,
                     "BIC": res.bic,
@@ -63,14 +39,64 @@ def fit_garch_models(returns, model_name="Series", dist="normal", max_order=3):
                     best_model = res
             except Exception as e:
                 results.append({
-                    "Model": f"GARCH({p},{q})",
+                    "Model": f"ARCH({p})",
                     "Log-Likelihood": None,
                     "AIC": None,
                     "BIC": None,
                     "Params": str(e)
                 })
 
-    return pd.DataFrame(results), best_model
+    # GARCH(p,q)
+    if GARCH:
+        for p in range(1, max_order + 1):
+                for q in range(1, max_order + 1):
+                    try:
+                        model = arch_model(returns, vol='GARCH', p=p, q=q, dist=dist, rescale=True)
+                        res = model.fit(disp="off")
+                        results.append({
+                            "Model": f"GARCH({p},{q})",
+                            "Log-Likelihood": res.loglikelihood,
+                            "AIC": res.aic,
+                            "BIC": res.bic,
+                            "Params": res.params.to_dict()
+                        })
+                        if res.aic < best_aic:
+                            best_aic = res.aic
+                            best_model = res
+                    except Exception as e:
+                        results.append({
+                            "Model": f"GARCH({p},{q})",
+                            "Log-Likelihood": None,
+                            "AIC": None,
+                            "BIC": None,
+                            "Params": str(e)
+                            })    
+    
+    # EGARCH(p,q)
+    if EGARCH:
+        for p in range(1, max_order + 1):
+            for q in range(1, max_order + 1):
+                try:
+                    model = arch_model(returns, vol='EGARCH', p=p, q=q, dist=dist, rescale=True)
+                    res = model.fit(disp="off")
+                    results.append({
+                        "Model": f"EGARCH({p},{q})",
+                        "Log-Likelihood": res.loglikelihood,
+                        "AIC": res.aic,
+                        "BIC": res.bic,
+                        "Params": res.params.to_dict()
+                    })
+                    if res.aic < best_aic:
+                        best_aic = res.aic
+                        best_model = res
+                except Exception as e:
+                    results.append({
+                        "Model": f"EGARCH({p},{q})",
+                        "Log-Likelihood": None,
+                        "AIC": None,
+                        "BIC": None,
+                        "Params": str(e)
+                    })
 
 
 
