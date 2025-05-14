@@ -14,7 +14,9 @@ library(dplyr)
 # Functions
 # -----------------------------------------------------------------------------
 
+#-----------
 # Load close price series
+#-----------
 load_close_series <- function(path) {
   df <- read_csv(path, col_types = cols()) %>%
     select(`Open Time`, Close) %>%
@@ -24,7 +26,10 @@ load_close_series <- function(path) {
   return(df)
 }
 
+
+#-----------
 # Compute descriptive statistics
+#-----------
 compute_stats <- function(r, name) {
   vol_ann <- sd(r) * sqrt(252 * (1440 / name)) * 100
   return(c(
@@ -35,7 +40,9 @@ compute_stats <- function(r, name) {
   ))
 }
 
+#-----------
 # Plot time series
+#-----------
 plot_series <- function(series_list, title, ylab) {
   df <- bind_rows(lapply(names(series_list), function(name) {
     data.frame(Date = index(series_list[[name]]), Value = coredata(series_list[[name]]), Asset = name)
@@ -46,7 +53,9 @@ plot_series <- function(series_list, title, ylab) {
     theme_minimal()
 }
 
+#-----------
 # Daily annualized volatility from intraday returns
+#-----------
 daily_ann_vol <- function(prices) {
   ret_1m <- ROC(prices$Close, type = "discrete")
   dates <- date(prices$`Open Time`[-1])
@@ -57,19 +66,25 @@ daily_ann_vol <- function(prices) {
   return(df)
 }
 
+#-----------
 # Plot autocorrelogram (ACF)
+#-----------
 plot_autocorrelogram <- function(series, lags = 20, title = "", squared = FALSE) {
   if (squared) series <- series^2
   acf(series, lag.max = lags, main = title)
 }
 
+#-----------
 # Plot partial autocorrelogram (PACF)
+#-----------
 plot_partial_autocorrelogram <- function(series, lags = 20, title = "", squared = FALSE) {
   if (squared) series <- series^2
   pacf(series, lag.max = lags, main = title)
 }
 
+#-----------
 # Diagnostics tests
+#-----------
 test_distribution_diagnostics <- function(series_list, lags = 20) {
   results <- lapply(names(series_list), function(name) {
     series <- na.omit(series_list[[name]])
@@ -90,7 +105,9 @@ test_distribution_diagnostics <- function(series_list, lags = 20) {
   bind_rows(results)
 }
 
+#-----------
 # Robust ACF plot
+#-----------
 gamma=function(x,h)
 {
   n=length(x)
@@ -119,7 +136,9 @@ n1.acf=function(x,main=NULL,method="NP")
   lines(c(1:nlag),1.96*band,lty=1,col="red")
 }
 
+#-----------
 # Work-around
+#-----------
 n2.acf = function(x, main = NULL, method = "NP")
 {
   n = length(x)
@@ -160,7 +179,9 @@ n2.acf = function(x, main = NULL, method = "NP")
   abline(h = -std.band, lty = 2, col = "blue")
 }
 
+#-----------
 # Simplified robust ACF function following Francq & Zakoian (2009)
+#-----------
 simple_robust_acf = function(x, main = NULL, lags = 30) {
   # Center the series
   x = x - mean(x)
@@ -191,7 +212,9 @@ simple_robust_acf = function(x, main = NULL, lags = 30) {
   cat("Robust 95% bounds: ±", round(3.92 * std_se, 4), "\n")
 }
 
+#-----------
 # Robust PACF plot
+#-----------
 n1.pacf=function(x,main=NULL,method="NP")
 {
   n=length(x)
@@ -208,7 +231,9 @@ n1.pacf=function(x,main=NULL,method="NP")
   lines(c(1:nlag),1.96*band,lty=1,col="red")
 }
 
+#-----------
 # Work-around PACF
+#-----------
 n2.pacf = function(x, main = NULL, method = "NP")
 {
   n = length(x)
@@ -502,13 +527,26 @@ n2.pacf(eth_ret_6hourly_xts, main = c(""))
 # Diagnostics
 # ------------------------------
 
+# Daily
+diagnostics_btc_daily <- test_distribution_diagnostics(btc_daily_list, lags = 20)
+diagnostics_eth_daily <- test_distribution_diagnostics(eth_daily_list, lags = 20)
 
+print(diagnostics_btc_daily)
+print(diagnostics_eth_daily)
 
+# 1-hour
+diagnostics_btc_hourly <- test_distribution_diagnostics(btc_hourly_list, lags = 20)
+diagnostics_eth_hourly <- test_distribution_diagnostics(eth_hourly_list, lags = 20)
 
+print(diagnostics_btc_hourly)
+print(diagnostics_eth_hourly)
 
+# 6-hour
+diagnostics_btc_6hourly <- test_distribution_diagnostics(btc_6hourly_list, lags = 20)
+diagnostics_eth_6hourly <- test_distribution_diagnostics(eth_6hourly_list, lags = 20)
 
-
-
+print(diagnostics_btc_6hourly)
+print(diagnostics_eth_6hourly)
 
 
 # ------------------------------
