@@ -548,7 +548,6 @@ diagnostics_eth_6hourly <- test_distribution_diagnostics(eth_6hourly_list, lags 
 print(diagnostics_btc_6hourly)
 print(diagnostics_eth_6hourly)
 
-
 # ------------------------------
 # Realized volatility
 # ------------------------------
