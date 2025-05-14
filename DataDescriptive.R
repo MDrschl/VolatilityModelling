@@ -57,10 +57,16 @@ daily_ann_vol <- function(prices) {
   return(df)
 }
 
-# Plot autocorrelogram
+# Plot autocorrelogram (ACF)
 plot_autocorrelogram <- function(series, lags = 20, title = "", squared = FALSE) {
   if (squared) series <- series^2
   acf(series, lag.max = lags, main = title)
+}
+
+# Plot partial autocorrelogram (PACF)
+plot_partial_autocorrelogram <- function(series, lags = 20, title = "", squared = FALSE) {
+  if (squared) series <- series^2
+  pacf(series, lag.max = lags, main = title)
 }
 
 # Diagnostics tests
@@ -83,6 +89,164 @@ test_distribution_diagnostics <- function(series_list, lags = 20) {
   })
   bind_rows(results)
 }
+
+# Robust ACF plot
+gamma=function(x,h)
+{
+  n=length(x)
+  h=abs(h)
+  x=x-mean(x)
+  gamma=sum(x[1:(n-h)]*x[(h+1):n])/n
+}
+
+rho=function(x,h)
+{
+  rho=gamma(x,h)/gamma(x,0)
+}
+
+n1.acf=function(x,main=NULL,method="NP")
+{
+  n=length(x)
+  nlag=40
+  acf.val=sapply(c(1:nlag),function(h) rho(x,h))
+  x2=x^2
+  var= 1+(sapply(c(1:nlag),function(h) gamma(x2,h)))/gamma(x,0)^2
+  band=sqrt(var/n)
+  minval=1.2*min(acf.val,-1.96*band,-1.96/sqrt(n))
+  maxval=1.2*max(acf.val,1.96*band,1.96/sqrt(n))
+  acf(x,lag.max=nlag,xlab="Lag",ylab="Sample autocorrelations",ylim=c(minval,maxval),main=main)
+  lines(c(1:nlag),-1.96*band,lty=1,col="red")
+  lines(c(1:nlag),1.96*band,lty=1,col="red")
+}
+
+# Work-around
+n2.acf = function(x, main = NULL, method = "NP")
+{
+  n = length(x)
+  nlag = 40
+  
+  # Calculate autocorrelations manually 
+  acf.val = sapply(c(1:nlag), function(h) rho(x, h))
+  
+  # Calculate robust bands
+  x2 = x^2
+  var = 1 + (sapply(c(1:nlag), function(h) gamma(x2, h))) / gamma(x, 0)^2
+  band = sqrt(var/n)
+  
+  # Calculate regular confidence band for comparison
+  std.band = 1.96/sqrt(n)
+  
+  # Set plot limits
+  minval = 1.2 * min(acf.val, -1.96 * band, -std.band)
+  maxval = 1.2 * max(acf.val, 1.96 * band, std.band)
+  
+  # Calculate ACF using R's function but don't plot it
+  acf_obj = acf(x, lag.max = nlag, plot = FALSE)
+  
+  # Manual plotting
+  plot(0:nlag, acf_obj$acf, type = "h", 
+       xlab = "Lag", ylab = "Sample autocorrelations",
+       ylim = c(minval, maxval), main = main)
+  
+  # Add reference line at zero
+  abline(h = 0)
+  
+  # Add the robust confidence bands
+  lines(1:nlag, 1.96 * band, lty = 1, col = "red")
+  lines(1:nlag, -1.96 * band, lty = 1, col = "red")
+  
+  # Optionally add standard bands for comparison
+  abline(h = std.band, lty = 2, col = "blue")
+  abline(h = -std.band, lty = 2, col = "blue")
+}
+
+# Simplified robust ACF function following Francq & Zakoian (2009)
+simple_robust_acf = function(x, main = NULL, lags = 30) {
+  # Center the series
+  x = x - mean(x)
+  n = length(x)
+  
+  # Get the ACF values using acf() for convenience
+  acf_obj = acf(x, lag.max = lags, plot = FALSE)
+  acf_values = as.vector(acf_obj$acf[-1])  # Remove lag 0
+  
+  # Standard error for standard bands
+  std_se = 1/sqrt(n)
+  
+  # Create the plot without confidence bands
+  plot(0:lags, c(1, acf_values), type = "h",
+       ylim = c(-0.2, 1),
+       xlab = "Lag", ylab = "ACF", main = main)
+  abline(h = 0)
+  
+  # Add standard confidence bands
+  abline(h = 1.96 * std_se, lty = 2, col = "blue")
+  abline(h = -1.96 * std_se, lty = 2, col = "blue")
+  
+  # Add simple scaled bands for GARCH effects (approximately 2x the standard)
+  abline(h = 3.92 * std_se, col = "red")  # 2x the standard
+  abline(h = -3.92 * std_se, col = "red") # 2x the standard
+  
+  cat("Standard 95% bounds: ±", round(1.96 * std_se, 4), "\n")
+  cat("Robust 95% bounds: ±", round(3.92 * std_se, 4), "\n")
+}
+
+# Robust PACF plot
+n1.pacf=function(x,main=NULL,method="NP")
+{
+  n=length(x)
+  nlag=40
+  pacf_obj = pacf(x, lag.max = nlag, plot = FALSE)
+  pacf.val = pacf_obj$acf
+  x2=x^2
+  var= 1+(sapply(c(1:nlag),function(h) gamma(x2,h)))/gamma(x,0)^2
+  band=sqrt(var/n)
+  minval=1.2*min(pacf.val,-1.96*band,-1.96/sqrt(n))
+  maxval=1.2*max(pacf.val,1.96*band,1.96/sqrt(n))
+  pacf(x,lag.max=nlag,xlab="Lag",ylab="Sample partial autocorrelations",ylim=c(minval,maxval),main=main)
+  lines(c(1:nlag),-1.96*band,lty=1,col="red")
+  lines(c(1:nlag),1.96*band,lty=1,col="red")
+}
+
+# Work-around PACF
+n2.pacf = function(x, main = NULL, method = "NP")
+{
+  n = length(x)
+  nlag = 40
+  
+  # Calculate robust bands
+  x2 = x^2
+  var = 1 + (sapply(c(1:nlag), function(h) gamma(x2, h))) / gamma(x, 0)^2
+  band = sqrt(var/n)
+  
+  # Calculate regular confidence band for comparison
+  std.band = 1.96/sqrt(n)
+  
+  # Calculate PACF using R's function but don't plot it
+  pacf_obj = pacf(x, lag.max = nlag, plot = FALSE)
+  pacf.val = pacf_obj$acf
+  
+  # Set plot limits
+  minval = 1.2 * min(pacf.val, -1.96 * band, -std.band)
+  maxval = 1.2 * max(pacf.val, 1.96 * band, std.band)
+  
+  # Manual plotting
+  plot(1:nlag, pacf.val, type = "h", 
+       xlab = "Lag", ylab = "Sample partial autocorrelations",
+       ylim = c(minval, maxval), main = main)
+  
+  # Add reference line at zero
+  abline(h = 0)
+  
+  # Add the robust confidence bands
+  lines(1:nlag, 1.96 * band, lty = 1, col = "red")
+  lines(1:nlag, -1.96 * band, lty = 1, col = "red")
+  
+  # Add standard bands for comparison
+  abline(h = std.band, lty = 2, col = "blue")
+  abline(h = -std.band, lty = 2, col = "blue")
+}
+
 
 # -----------------------------------------------------------------------------
 # Code
@@ -140,7 +304,6 @@ eth_train_6hourly <- eth_train %>%
   group_by(SixHour) %>%
   summarise(Close = last(Close), .groups = "drop") %>%
   drop_na()
-
 
 # ------------------------------
 # Compute returns
@@ -296,32 +459,44 @@ plot_autocorrelogram(as.vector(eth_ret_6hourly_xts), lags = 20, title = "", squa
 
 # PACF plots
 # Daily
-
+plot_partial_autocorrelogram(btc_ret_daily_xts, lags = 20, title = "", squared = FALSE)
+plot_partial_autocorrelogram(eth_ret_daily_xts, lags = 20, title = "", squared = FALSE)
 
 # 1-hour
-
+plot_partial_autocorrelogram(as.vector(btc_ret_hourly_xts), lags = 20, title = "", squared = FALSE)
+plot_partial_autocorrelogram(as.vector(eth_ret_hourly_xts), lags = 20, title = "", squared = FALSE)
 
 # 6-hour
+plot_partial_autocorrelogram(as.vector(btc_ret_6hourly_xts), lags = 20, title = "", squared = FALSE)
+plot_partial_autocorrelogram(as.vector(eth_ret_6hourly_xts), lags = 20, title = "", squared = FALSE)
 
 
 # Robust ACF plots
 # Daily
-
+n1.acf(btc_ret_daily_xts, main = c(""))
+n1.acf(eth_ret_daily_xts, main = c(""))
 
 # 1-hour
-
+n2.acf(btc_ret_hourly_xts, main = c(""))
+n2.acf(eth_ret_hourly_xts, main = c(""))
 
 # 6-hour
+n2.acf(btc_ret_6hourly_xts, main = c(""))
+n2.acf(eth_ret_6hourly_xts, main = c(""))
 
 
 # Robust PACF plots
 # Daily
-
+n1.pacf(btc_ret_daily_xts, main = c(""))
+n1.pacf(eth_ret_daily_xts, main = c(""))
 
 # 1-hour
-
+n2.pacf(btc_ret_hourly_xts, main = c(""))
+n2.pacf(eth_ret_hourly_xts, main = c(""))
 
 # 6-hour
+n2.pacf(btc_ret_6hourly_xts, main = c(""))
+n2.pacf(eth_ret_6hourly_xts, main = c(""))
 
 # ------------------------------
 # Diagnostics
@@ -331,6 +506,14 @@ plot_autocorrelogram(as.vector(eth_ret_6hourly_xts), lags = 20, title = "", squa
 
 
 
+
+
+
+
+
+# ------------------------------
+# Realized volatility
+# ------------------------------
 
 
 
