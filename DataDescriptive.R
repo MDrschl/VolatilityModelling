@@ -284,6 +284,72 @@ n2.pacf = function(x, main = NULL, method = "NP")
   abline(h = -std.band, lty = 2, col = "blue")
 }
 
+#-----------
+# Function to compute the RV at different frequencies
+#-----------
+hfrtn <- function(da,int,logrtn=TRUE){
+  # Compute intraday returns
+  #
+  # int: time intervals in minutes
+  # da: data in the format: date, hour, minute, second, price, volume
+  #
+  if(!is.matrix(da))da=as.matrix(da)
+  intsec=int*60
+  istart=0
+  iend=24*60*60  
+  # compute the number of prices
+  tradetime=iend - istart
+  ntrade=floor(tradetime/intsec)
+  T=dim(da)[1]
+  nday=da[T,1]-da[1,1]+1
+  npri=nday*ntrade
+  #print(c(ntrade,nday,npri))
+  
+  price=rep(0,npri)
+  # price is the last transaction price of the time interval
+  caltime = da[,2]*60*60 + da[,3]*60
+  #caltime=da[,2]*60*60+da[,3]*60+da[,4]
+  #plot(caltime,type='l')
+  
+  icnt=0
+  date=da[1,1]
+  for (i in 1:T) {
+    if(caltime[i] >= istart){
+      iday=da[i,1]-date
+      if(caltime[i] < (iend+1)){
+        
+        if(caltime[i]==iend){
+          price[iday*ntrade+ntrade]=da[i,5]
+        }
+        
+        if((caltime[i] >= istart) && (caltime[i] < iend)){
+          ii=caltime[i]-istart
+          ij=floor(ii/intsec)
+          price[iday*ntrade+ij+1]=da[i,5]
+        }
+      }
+    }
+  }
+  for (i in 2:npri){
+    if(price[i] <= 0)price[i]=price[i-1]
+  }
+  
+  plot(price,type='l')
+  
+  pri=log(price)
+  #skip overnight returns
+  nrtn=ntrade-1
+  rtn=NULL
+  for (i in 1:nday){
+    ist=(i-1)*ntrade
+    for (j in 2:ntrade){
+      rtn=c(rtn,pri[ist+j]-pri[ist+j-1])
+    }
+  }
+  
+  hfrtn = list(rtn=rtn,price=price)
+}
+
 # -----------------------------------------------------------------------------
 # Code
 # -----------------------------------------------------------------------------
@@ -569,221 +635,67 @@ print(summary_table_diagnostics)
 # Volatility signature plot
 
 # Load the data in the correct format
-day1_date_btc <- as.Date("2023-10-23")
-day2_date_btc <- day1_date + 1
-day3_date_btc <- day2_date + 1
-day4_date_btc <- day3_date + 1
-day5_date_btc <- day4_date + 1
-
-btc_day_1 <- subset(btc_full, as.Date(`Open Time`) == day1_date_btc)
-btc_day_1_clean <- btc_day_1 %>%
-  group_by(`Open Time`) %>%
-  summarise(Close = last(Close), .groups = "drop")
-
-btc_day_1_formatted <- btc_day_1_clean %>%
-  mutate(
-    Date = as.numeric(format(`Open Time`, "%Y%m%d")),
-    Hour = as.numeric(format(`Open Time`, "%H")),
-    Minute = as.numeric(format(`Open Time`, "%M")),
-    Second = as.numeric(format(`Open Time`, "%S")),
-    Volume = 1  # dummy value
-  ) %>%
-  select(Date, Hour, Minute, Second, Close, Volume)
-
-# Function to compute the RV at different frequencies
-"hfrtn" = function(da,int,logrtn=TRUE){
-  # Compute intraday returns
-  #
-  # int: time intervals in minutes
-  # da: data in the format: date, hour, minute, second, price, volume
-  #
-  if(!is.matrix(da))da=as.matrix(da)
-  intsec=int*60
-  istart=9*60*60+30*60
-  iend=16*60*60
-  # compute the number of prices
-  tradetime=6.5*60*60
-  ntrade=floor(tradetime/intsec)
-  T=dim(da)[1]
-  nday=da[T,1]-da[1,1]+1
-  npri=nday*ntrade
-  #print(c(ntrade,nday,npri))
-  
-  price=rep(0,npri)
-  # price is the last transaction price of the time interval
-  caltime=da[,2]*60*60+da[,3]*60+da[,4]
-  #plot(caltime,type='l')
-  
-  icnt=0
-  date=da[1,1]
-  for (i in 1:T) {
-    if(caltime[i] &gt; istart){
-      iday=da[i,1]-date
-      if(caltime[i] < (iend+1)){
-        
-        if(caltime[i]==iend){
-          price[iday*ntrade+ntrade]=da[i,5]
-        }
-        
-        if((caltime[i] &gt; istart) &amp;&amp; (caltime[i] < iend)){
-          ii=caltime[i]-istart
-          ij=floor(ii/intsec)
-          price[iday*ntrade+ij+1]=da[i,5]
-        }
-      }
-    }
-  }
-  for (i in 2:npri){
-    if(price[i] <= 0)price[i]=price[i-1]
-  }
-  
-  plot(price,type='l')
-  
-  pri=log(price)
-  #skip overnight returns
-  nrtn=ntrade-1
-  rtn=NULL
-  for (i in 1:nday){
-    ist=(i-1)*ntrade
-    for (j in 2:ntrade){
-      rtn=c(rtn,pri[ist+j]-pri[ist+j-1])
-    }
-  }
-  
-  hfrtn = list(rtn=rtn,price=price)
-}
-
-
-rv.boeing=matrix(,5,60)
-
-for (t in 1:60)
-{
-  a=hfrtn(da=boeing5,int=t)
-  
-  for (i in 1:length(a$rtn))
-  {
-    if (a$rtn[i]=="NaN")
-    {
-      a$rtn[i]=0
-    }
-  }
-  
-  rv.boeing[5,t]=sum(a$rtn^2)
-}
-
-rv=rv.boeing
-a=colMeans(rv)
-
-ts.plot(a,xlab="Minutes",ylab="Sample RV",main="Volatility signature plot") #Volatility signature plot
-lines(rep(mean(a[30:60]),60),lty=3)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # BTC
-# 5 days just before training-test split
-start_date <- as.Date("2023-10-23")
-end_date <- start_date + 4
+day1_date_btc <- as.Date("2023-10-23")
+day2_date_btc <- day1_date_btc + 1
+day3_date_btc <- day2_date_btc + 1
+day4_date_btc <- day3_date_btc + 1
+day5_date_btc <- day4_date_btc + 1
 
-btc_5days <- subset(btc_full, as.Date(`Open Time`) >= start_date & as.Date(`Open Time`) <= end_date)
-btc_split <- split(btc_5days, as.Date(btc_5days$`Open Time`))
+days_list <- list(day1_date_btc, day2_date_btc, day3_date_btc, day4_date_btc ,day5_date_btc)
 
+btc_day <- list()
+btc_day_clean <- list()
+btc_day_formatted <- list()
+
+for (d in 1:5){
+  
+  btc_day[[d]] <- subset(btc_full, as.Date(`Open Time`) == days_list[[d]])
+  
+  btc_day_clean[[d]] <- btc_day[[d]] %>%
+    group_by(`Open Time`) %>%
+    summarise(Close = last(Close), .groups = "drop")
+  
+  btc_day_formatted[[d]] <- btc_day_clean[[d]] %>%
+    mutate(
+      Date = as.numeric(format(`Open Time`, "%Y%m%d")),
+      Hour = as.numeric(format(`Open Time`, "%H")),
+      Minute = as.numeric(format(`Open Time`, "%M")),
+      Second = as.numeric(format(`Open Time`, "%S")),
+      Volume = 1  # dummy value
+    ) %>%
+    select(Date, Hour, Minute, Second, Close, Volume)
+}
+
+# Calculate realized variances
 rv.btc=matrix(,5,60)
 
-for (d in 1:5) {
-  for (t in 1:60) {
-    a = hfrtn(da = btc_split[[d]], int = t)
-    a$rtn[is.nan(a$rtn)] <- 0
-    rv.btc[d, t] = sum(a$rtn^2)
+for (d in 1:5){
+  for (t in 1:60)
+  {
+    a=hfrtn(da=btc_day_formatted[[d]],int=t)
+    
+    for (i in 1:length(a$rtn))
+    {
+      if (is.nan(a$rtn[i]))
+      {
+        a$rtn[i]=0
+      }
+    }
+    
+    rv.btc[d,t]=sum(a$rtn^2)
   }
 }
 
 rv=rv.btc
+#a=rv
 a=colMeans(rv)
 
 ts.plot(a,xlab="Minutes",ylab="Sample RV",main="Volatility signature plot") #Volatility signature plot
 lines(rep(mean(a[30:60]),60),lty=3)
 
-# 5 day period of extreme historical volatility
-
-
-
-
 # ETH
-# 5 days just before training-test split
-start_date <- as.Date("2023-10-23")
-end_date <- start_date + 4
-
-eth_5days <- subset(eth_full, as.Date(`Open Time`) >= start_date & as.Date(`Open Time`) <= end_date)
-eth_split <- split(eth_5days, as.Date(eth_5days$`Open Time`))
-
-rv.eth=matrix(,5,60)
-
-for (d in 1:5) {
-  for (t in 1:60) {
-    a = hfrtn(da = eth_split[[d]], int = t)
-    a$rtn[is.nan(a$rtn)] <- 0
-    rv.eth[d, t] = sum(a$rtn^2)
-  }
-}
-
-rv_eth_2 = rv.eth
-a = colMeans(rv_eth_2)
-
-ts.plot(a,xlab="Minutes",ylab="Sample RV",main="Volatility signature plot") #Volatility signature plot
-lines(rep(mean(a[30:60]),60),lty=3)
-
-
-summary(eth_5days$Close)
-length(unique(eth_5days$Close))
-table(diff(as.numeric(eth_5days$`Open Time`)))
 
 
 
