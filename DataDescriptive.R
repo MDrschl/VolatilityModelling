@@ -313,11 +313,11 @@ volatility_signature <- function(data,
     
     data_day[[d]] <- subset(data, as.Date(`Open Time`) == day_date_list[[d]])
     
-    data_day_clean[[d]] <- data_day[[d]] %>%
-      group_by(`Open Time`) %>%
-      summarise(Close = last(Close), .groups = "drop")
+#    data_day_clean[[d]] <- data_day[[d]] %>%
+#      group_by(`Open Time`) %>%
+#      summarise(Close = last(Close), .groups = "drop")
     
-    data_day_formatted[[d]] <- data_day_clean[[d]] %>%
+    data_day_formatted[[d]] <- data_day[[d]] %>%
       mutate(
         Date = as.numeric(format(`Open Time`, "%Y%m%d")),
         Hour = as.numeric(format(`Open Time`, "%H")),
@@ -380,15 +380,7 @@ volatility_signature <- function(data,
 # -----------------------------------------------------------------------------
 
 # ------------------------------
-# Load data
-# ------------------------------
-
-#btc_full <- load_close_series("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/BTCUSDT_1m.csv")
-
-#eth_full <- load_close_series("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/ETHUSDT_1m.csv")
-
-# ------------------------------
-# Raw data inspection
+# Load raw data inspection
 # ------------------------------
 
 # BTC
@@ -400,8 +392,8 @@ str(btc_raw)
 cat("Number of unique timestamps:", length(unique(btc_raw$Open.Time)), "\n")
 
 # Count duplicates per timestamp (just to see)
-dup_counts <- table(btc_raw$Open.Time)
-cat("Number of timestamps with duplicates:", sum(dup_counts > 1), "\n")
+dup_counts_btc <- table(btc_raw$Open.Time)
+cat("Number of timestamps with duplicates:", sum(dup_counts_btc > 1), "\n")
 
 # Clean data: aggregate duplicates (handles 2, 3, or more duplicates)
 btc_raw_clean <- btc_raw %>%
@@ -415,16 +407,43 @@ btc_raw_clean <- btc_raw %>%
 cat("Cleaned data has", nrow(btc_raw_clean), "unique timestamp rows.\n")
 
 # Optional: inspect first rows
-print(head(btc_clean))
+print(head(btc_raw_clean[["Close"]]))
 
+# Convert into format that we need
+btc_full <- btc_raw_clean %>%
+  rename(`Open Time` = `Open.Time`) %>%
+  mutate(`Open Time` = ymd_hms(`Open Time`))
 
 # ETH
+# Load raw data
+eth_raw <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/ETHUSDT_1m.csv")
 
+# Check structure and unique timestamps
+str(eth_raw)
+cat("Number of unique timestamps:", length(unique(eth_raw$Open.Time)), "\n")
 
+# Count duplicates per timestamp (just to see)
+dup_counts_eth <- table(eth_raw$Open.Time)
+cat("Number of timestamps with duplicates:", sum(dup_counts_eth > 1), "\n")
 
+# Clean data: aggregate duplicates (handles 2, 3, or more duplicates)
+eth_raw_clean <- eth_raw %>%
+  group_by(Open.Time) %>%
+  summarise(
+    Close = last(Close),
+    .groups = "drop"
+  ) %>%
+  arrange(Open.Time)
 
+cat("Cleaned data has", nrow(eth_raw_clean), "unique timestamp rows.\n")
 
+# Optional: inspect first rows
+print(head(eth_raw_clean[["Close"]]))
 
+# Convert into format that we need
+eth_full <- eth_raw_clean %>%
+  rename(`Open Time` = `Open.Time`) %>%
+  mutate(`Open Time` = ymd_hms(`Open Time`))
 
 # ------------------------------
 # Preprocess data
