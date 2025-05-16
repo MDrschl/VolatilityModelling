@@ -445,6 +445,23 @@ eth_full <- eth_raw_clean %>%
   rename(`Open Time` = `Open.Time`) %>%
   mutate(`Open Time` = ymd_hms(`Open Time`))
 
+# Check validity of minute data
+summary(btc_full)
+summary(eth_full)
+
+# Plot minute level prices
+# BTC plot
+ggplot(btc_full, aes(x = `Open Time`, y = Close)) +
+  geom_line(color = "steelblue", alpha = 0.7) +
+  labs(title = "BTC Minute Price Series", x = "Time", y = "BTC Price (USD)") +
+  theme_minimal()
+
+# ETH plot
+ggplot(eth_full, aes(x = `Open Time`, y = Close)) +
+  geom_line(color = "darkorange", alpha = 0.7) +
+  labs(title = "ETH Minute Price Series", x = "Time", y = "ETH Price (USD)") +
+  theme_minimal()
+
 # ------------------------------
 # Preprocess data
 # ------------------------------
@@ -749,6 +766,38 @@ for (start_date in start_dates_2023){
   }
 }
 
+# 2024
+start_dates_2024 <- seq(as.Date("2024-01-02"), by = "7 days", length.out = 48)
+n_days_seq = c(7, 14, 21, 28)
+
+for (start_date in start_dates_2024){
+  for (n_day in n_days_seq){
+    volatility_signature(btc_full, 
+                         asset_name = "BTC",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
+
+# 2025
+start_dates_2025 <- seq(as.Date("2025-01-02"), by = "7 days", length.out = 16)
+n_days_seq = c(7, 14, 21, 28)
+
+for (start_date in start_dates_2025){
+  for (n_day in n_days_seq){
+    volatility_signature(btc_full, 
+                         asset_name = "BTC",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
+
 # PLOT USED
 # Start date = 27 November 2023, days = 14
 volatility_signature(btc_full, 
@@ -759,27 +808,8 @@ volatility_signature(btc_full,
                      max_interval = 60,
                      plot = TRUE)
 
-
-
 # ETH
 # Play around with starting date and days
-# 2023
-start_dates_2023 <- seq(as.Date("2023-01-02"), by = "7 days", length.out = 48)
-n_days_seq = c(7, 14, 21, 28)
-
-
-for (start_date in start_dates_2023){
-  for (n_day in n_days_seq){
-    volatility_signature(eth_full, 
-                         asset_name = "ETH",
-                         start_date = as.Date(start_date),
-                         n_days = n_day,
-                         min_interval = 1,
-                         max_interval = 60,
-                         plot = TRUE)
-  }
-}
-
 # 2017
 start_dates_2017 <- seq(as.Date("2017-08-21"), by = "7 days", length.out = 48)
 n_days_seq = c(7, 14, 21, 28)
@@ -797,10 +827,57 @@ for (start_date in start_dates_2017){
   }
 }
 
+# 2023
+start_dates_2023 <- seq(as.Date("2023-01-02"), by = "7 days", length.out = 48)
+n_days_seq = c(7, 14, 21, 28)
+
+
+for (start_date in start_dates_2023){
+  for (n_day in n_days_seq){
+    volatility_signature(eth_full, 
+                         asset_name = "ETH",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
+
+# 2024
+start_dates_2024 <- seq(as.Date("2024-01-02"), by = "7 days", length.out = 48)
+n_days_seq = c(7, 14, 21, 28)
+
+
+for (start_date in start_dates_2024){
+  for (n_day in n_days_seq){
+    volatility_signature(eth_full, 
+                         asset_name = "ETH",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
+
+# 2025
+start_dates_2025 <- seq(as.Date("2025-01-02"), by = "7 days", length.out = 16)
+n_days_seq = c(7, 14, 21, 28)
+
+for (start_date in start_dates_2025){
+  for (n_day in n_days_seq){
+    volatility_signature(eth_full, 
+                         asset_name = "ETH",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
+
 # Extract Realized Variances for out-of-sample testing
-
-
-
 
 
 
