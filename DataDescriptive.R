@@ -9,6 +9,7 @@ library(PerformanceAnalytics)
 library(FinTS)
 library(moments)
 library(dplyr)
+library(ggplot2)
 
 # Audrino's packages
 library(fBasics) #Load the package fBasics
@@ -448,6 +449,11 @@ eth_full <- eth_raw_clean %>%
 # Check validity of minute data
 summary(btc_full)
 summary(eth_full)
+
+# Save cleaned price series
+write_csv(btc_full, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/btc_full.csv")
+
+write_csv(eth_full, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/eth_full.csv")
 
 # Plot minute level prices
 # BTC plot
