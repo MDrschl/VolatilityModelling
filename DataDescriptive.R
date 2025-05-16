@@ -38,7 +38,6 @@ load_close_series <- function(path) {
   return(df)
 }
 
-
 #-----------
 # Compute descriptive statistics
 #-----------
@@ -192,7 +191,7 @@ n2.acf = function(x, main = NULL, method = "NP")
 }
 
 #-----------
-# Simplified robust ACF function following Francq & Zakoian (2009)
+# Simplified robust ACF following Francq & Zakoian (2009)
 #-----------
 simple_robust_acf = function(x, main = NULL, lags = 30) {
   # Center the series
@@ -285,69 +284,95 @@ n2.pacf = function(x, main = NULL, method = "NP")
 }
 
 #-----------
-# Function to compute the RV at different frequencies
+# RV + volatility signature plot
 #-----------
-hfrtn <- function(da,int,logrtn=TRUE){
-  # Compute intraday returns
-  #
-  # int: time intervals in minutes
-  # da: data in the format: date, hour, minute, second, price, volume
-  #
-  if(!is.matrix(da))da=as.matrix(da)
-  intsec=int*60
-  istart=0
-  iend=24*60*60  
-  # compute the number of prices
-  tradetime=iend - istart
-  ntrade=floor(tradetime/intsec)
-  T=dim(da)[1]
-  nday=da[T,1]-da[1,1]+1
-  npri=nday*ntrade
-  #print(c(ntrade,nday,npri))
+volatility_signature <- function(data, 
+                                 asset_name = "BTC", 
+                                 start_date = "2023-10-23", 
+                                 n_days = 20, 
+                                 min_interval = 1, 
+                                 max_interval = 60, 
+                                 plot = TRUE){
   
-  price=rep(0,npri)
-  # price is the last transaction price of the time interval
-  caltime = da[,2]*60*60 + da[,3]*60
-  #caltime=da[,2]*60*60+da[,3]*60+da[,4]
-  #plot(caltime,type='l')
+  # ---------------
+  # Data cleaning
+  # ---------------
   
-  icnt=0
-  date=da[1,1]
-  for (i in 1:T) {
-    if(caltime[i] >= istart){
-      iday=da[i,1]-date
-      if(caltime[i] < (iend+1)){
-        
-        if(caltime[i]==iend){
-          price[iday*ntrade+ntrade]=da[i,5]
-        }
-        
-        if((caltime[i] >= istart) && (caltime[i] < iend)){
-          ii=caltime[i]-istart
-          ij=floor(ii/intsec)
-          price[iday*ntrade+ij+1]=da[i,5]
-        }
-      }
+  day_date_list <- list()
+  day_date_list[[1]] <- as.Date(start_date)
+  
+  for (d in 2:n_days){ 
+    day_date_list[[d]] <- day_date_list[[d-1]] + 1
+  }
+  
+  data_day <- list()
+  data_day_clean <- list()
+  data_day_formatted <- list()
+  
+  for (d in 1:n_days){
+    
+    data_day[[d]] <- subset(data, as.Date(`Open Time`) == day_date_list[[d]])
+    
+    data_day_clean[[d]] <- data_day[[d]] %>%
+      group_by(`Open Time`) %>%
+      summarise(Close = last(Close), .groups = "drop")
+    
+    data_day_formatted[[d]] <- data_day_clean[[d]] %>%
+      mutate(
+        Date = as.numeric(format(`Open Time`, "%Y%m%d")),
+        Hour = as.numeric(format(`Open Time`, "%H")),
+        Minute = as.numeric(format(`Open Time`, "%M")),
+        Second = as.numeric(format(`Open Time`, "%S")),
+        Volume = 1  # dummy value
+      ) %>%
+      select(Date, Hour, Minute, Second, Close, Volume)
+  }
+  
+  # ---------------
+  # RV calculation
+  # ---------------
+  
+  sequence_list <- list()
+  price_list <- list()
+  log_returns_list <- list()
+  rv_list <- list()
+  
+  for (d in 1:n_days){
+    
+    sequence_list[[d]] <- list() 
+    price_list[[d]] <- list() 
+    log_returns_list[[d]] <- list() 
+    rv_list[[d]] <- numeric(max_interval - min_interval + 1)
+    
+    idx <- 1
+    for (i in min_interval:max_interval){
+      sequence_list[[d]][[idx]] <- seq(1, nrow(data_day_formatted[[d]]), by = i)      # List with vectors of indices
+      price_list[[d]][[idx]] <- data_day_formatted[[d]][sequence_list[[d]][[idx]],]   # List with prices vectors 
+      log_returns_list[[d]][[idx]] <- diff(log(price_list[[d]][[idx]][["Close"]]))    # List with log return vectors
+      rv_list[[d]][idx] <- sum((log_returns_list[[d]][[idx]])^2)                      # List with estimate Realized Variance (at each interval)
+      idx <- idx + 1
     }
   }
-  for (i in 2:npri){
-    if(price[i] <= 0)price[i]=price[i-1]
+  
+  # ---------------
+  # Plot
+  # ---------------
+  
+  if (plot) {
+    plot(min_interval:max_interval, colMeans(do.call(rbind, rv_list)), type = "l", 
+         main = paste("Volatility signature plot:", asset_name,
+                      "\nFrom:", start_date, "for", n_days, "days"),
+         xlab = "Minutes",
+         ylab = "Sample RV",
+         col = "black", 
+         lwd = 1.5)
+    
+    abline(h = mean(colMeans(do.call(rbind, rv_list))[floor(max_interval / 2):max_interval]), col = "grey", lty = "dotted")
   }
   
-  plot(price,type='l')
   
-  pri=log(price)
-  #skip overnight returns
-  nrtn=ntrade-1
-  rtn=NULL
-  for (i in 1:nday){
-    ist=(i-1)*ntrade
-    for (j in 2:ntrade){
-      rtn=c(rtn,pri[ist+j]-pri[ist+j-1])
-    }
-  }
+  return(setNames(list(rv_list), asset_name))
   
-  hfrtn = list(rtn=rtn,price=price)
 }
 
 # -----------------------------------------------------------------------------
@@ -634,68 +659,102 @@ print(summary_table_diagnostics)
 
 # Volatility signature plot
 
-# Load the data in the correct format
-
 # BTC
-day1_date_btc <- as.Date("2023-10-23")
-day2_date_btc <- day1_date_btc + 1
-day3_date_btc <- day2_date_btc + 1
-day4_date_btc <- day3_date_btc + 1
-day5_date_btc <- day4_date_btc + 1
+# Start date = 18 August 2017, days = 14
+volatility_signature(btc_full, 
+                     asset_name = "BTC",
+                     start_date = "2017-08-18",
+                     n_days = 14,
+                     min_interval = 1,
+                     max_interval = 60,
+                     plot = TRUE)
 
-days_list <- list(day1_date_btc, day2_date_btc, day3_date_btc, day4_date_btc ,day5_date_btc)
+# Play around with starting date and days
+# 2023
+start_dates_2023 <- seq(as.Date("2023-01-02"), by = "7 days", length.out = 48)
+n_days_seq = c(7, 14, 21, 28)
 
-btc_day <- list()
-btc_day_clean <- list()
-btc_day_formatted <- list()
 
-for (d in 1:5){
-  
-  btc_day[[d]] <- subset(btc_full, as.Date(`Open Time`) == days_list[[d]])
-  
-  btc_day_clean[[d]] <- btc_day[[d]] %>%
-    group_by(`Open Time`) %>%
-    summarise(Close = last(Close), .groups = "drop")
-  
-  btc_day_formatted[[d]] <- btc_day_clean[[d]] %>%
-    mutate(
-      Date = as.numeric(format(`Open Time`, "%Y%m%d")),
-      Hour = as.numeric(format(`Open Time`, "%H")),
-      Minute = as.numeric(format(`Open Time`, "%M")),
-      Second = as.numeric(format(`Open Time`, "%S")),
-      Volume = 1  # dummy value
-    ) %>%
-    select(Date, Hour, Minute, Second, Close, Volume)
-}
-
-# Calculate realized variances
-rv.btc=matrix(,5,60)
-
-for (d in 1:5){
-  for (t in 1:60)
-  {
-    a=hfrtn(da=btc_day_formatted[[d]],int=t)
-    
-    for (i in 1:length(a$rtn))
-    {
-      if (is.nan(a$rtn[i]))
-      {
-        a$rtn[i]=0
-      }
-    }
-    
-    rv.btc[d,t]=sum(a$rtn^2)
+for (start_date in start_dates_2023){
+  for (n_day in n_days_seq){
+    volatility_signature(btc_full, 
+                         asset_name = "BTC",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
   }
 }
 
-rv=rv.btc
-#a=rv
-a=colMeans(rv)
+# PLOT USED
+# Start date = 27 November 2023, days = 14
+volatility_signature(btc_full, 
+                     asset_name = "BTC",
+                     start_date = "2023-11-27",
+                     n_days = 14,
+                     min_interval = 1,
+                     max_interval = 60,
+                     plot = TRUE)
 
-ts.plot(a,xlab="Minutes",ylab="Sample RV",main="Volatility signature plot") #Volatility signature plot
-lines(rep(mean(a[30:60]),60),lty=3)
+
 
 # ETH
+# Play around with starting date and days
+# 2023
+start_dates_2023 <- seq(as.Date("2023-01-02"), by = "7 days", length.out = 48)
+n_days_seq = c(7, 14, 21, 28)
+
+
+for (start_date in start_dates_2023){
+  for (n_day in n_days_seq){
+    volatility_signature(eth_full, 
+                         asset_name = "ETH",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
+
+# 2017
+start_dates_2017 <- seq(as.Date("2017-08-21"), by = "7 days", length.out = 48)
+n_days_seq = c(7, 14, 21, 28)
+
+
+for (start_date in start_dates_2017){
+  for (n_day in n_days_seq){
+    volatility_signature(eth_full, 
+                         asset_name = "ETH",
+                         start_date = as.Date(start_date),
+                         n_days = n_day,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
+
+# Extract Realized Variances for out-of-sample testing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
