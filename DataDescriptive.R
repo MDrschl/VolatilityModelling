@@ -380,12 +380,55 @@ volatility_signature <- function(data,
 # -----------------------------------------------------------------------------
 
 # ------------------------------
-# Load and preprocess data
+# Load data
 # ------------------------------
 
-btc_full <- load_close_series("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/BTCUSDT_1m.csv")
+#btc_full <- load_close_series("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/BTCUSDT_1m.csv")
 
-eth_full <- load_close_series("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/ETHUSDT_1m.csv")
+#eth_full <- load_close_series("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/ETHUSDT_1m.csv")
+
+# ------------------------------
+# Raw data inspection
+# ------------------------------
+
+# BTC
+# Load raw data
+btc_raw <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/BTCUSDT_1m.csv")
+
+# Check structure and unique timestamps
+str(btc_raw)
+cat("Number of unique timestamps:", length(unique(btc_raw$Open.Time)), "\n")
+
+# Count duplicates per timestamp (just to see)
+dup_counts <- table(btc_raw$Open.Time)
+cat("Number of timestamps with duplicates:", sum(dup_counts > 1), "\n")
+
+# Clean data: aggregate duplicates (handles 2, 3, or more duplicates)
+btc_raw_clean <- btc_raw %>%
+  group_by(Open.Time) %>%
+  summarise(
+    Close = last(Close),
+    .groups = "drop"
+  ) %>%
+  arrange(Open.Time)
+
+cat("Cleaned data has", nrow(btc_raw_clean), "unique timestamp rows.\n")
+
+# Optional: inspect first rows
+print(head(btc_clean))
+
+
+# ETH
+
+
+
+
+
+
+
+# ------------------------------
+# Preprocess data
+# ------------------------------
 
 split_date <- ymd("2023-10-31")
 
