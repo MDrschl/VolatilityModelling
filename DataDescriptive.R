@@ -891,7 +891,7 @@ rv_values_btc <- unlist(btc_rv$BTC)
 rv_dates_btc <- seq.Date(from = as.Date("2023-11-01"), by = "day", length.out = 546)
 btc_rv_df <- data.frame(Date = rv_dates_btc, RV_1min = rv_values_btc)
 
-write_csv(btc_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/btc_rv_df.csv")
+write_csv(btc_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/btc_rv_df.csv")
 
 # ETH - 1 minute intervals
 eth_rv <- volatility_signature(eth_full, 
@@ -906,7 +906,7 @@ rv_values_eth <- unlist(eth_rv$ETH)
 rv_dates_eth <- seq.Date(from = as.Date("2023-11-01"), by = "day", length.out = 546)
 eth_rv_df <- data.frame(Date = rv_dates_eth, RV_1min = rv_values_eth)
 
-write_csv(eth_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/eth_rv_df.csv")
+write_csv(eth_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/eth_rv_df.csv")
 
 
 
