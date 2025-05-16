@@ -457,16 +457,10 @@ write_csv(eth_full, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~C
 
 # Plot minute level prices
 # BTC plot
-ggplot(btc_full, aes(x = `Open Time`, y = Close)) +
-  geom_line(color = "steelblue", alpha = 0.7) +
-  labs(title = "BTC Minute Price Series", x = "Time", y = "BTC Price (USD)") +
-  theme_minimal()
+
 
 # ETH plot
-ggplot(eth_full, aes(x = `Open Time`, y = Close)) +
-  geom_line(color = "darkorange", alpha = 0.7) +
-  labs(title = "ETH Minute Price Series", x = "Time", y = "ETH Price (USD)") +
-  theme_minimal()
+
 
 # ------------------------------
 # Preprocess data
@@ -817,7 +811,7 @@ volatility_signature(btc_full,
 # ETH
 # Play around with starting date and days
 # 2017
-start_dates_2017 <- seq(as.Date("2017-08-21"), by = "7 days", length.out = 48)
+start_dates_2017 <- seq(as.Date("2017-08-21"), by = "7 days", length.out = 1)
 n_days_seq = c(7, 14, 21, 28)
 
 
@@ -826,7 +820,7 @@ for (start_date in start_dates_2017){
     volatility_signature(eth_full, 
                          asset_name = "ETH",
                          start_date = as.Date(start_date),
-                         n_days = n_day,
+                         n_days = 14,
                          min_interval = 1,
                          max_interval = 60,
                          plot = TRUE)
@@ -860,7 +854,7 @@ for (start_date in start_dates_2024){
     volatility_signature(eth_full, 
                          asset_name = "ETH",
                          start_date = as.Date(start_date),
-                         n_days = n_day,
+                         n_days = 14,
                          min_interval = 1,
                          max_interval = 60,
                          plot = TRUE)
@@ -884,6 +878,36 @@ for (start_date in start_dates_2025){
 }
 
 # Extract Realized Variances for out-of-sample testing
+# BTC - 1 minute intervals
+btc_rv <- volatility_signature(btc_full, 
+                               asset_name = "BTC",
+                               start_date = "2023-11-01",
+                               n_days = 546,
+                               min_interval = 1,
+                               max_interval = 1,
+                               plot = FALSE)
+
+rv_values_btc <- unlist(btc_rv$BTC)
+rv_dates_btc <- seq.Date(from = as.Date("2023-11-01"), by = "day", length.out = 546)
+btc_rv_df <- data.frame(Date = rv_dates_btc, RV_1min = rv_values_btc)
+
+write_csv(btc_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/btc_rv_df.csv")
+
+# ETH - 1 minute intervals
+eth_rv <- volatility_signature(eth_full, 
+                               asset_name = "ETH",
+                               start_date = "2023-11-01",
+                               n_days = 546,
+                               min_interval = 1,
+                               max_interval = 1,
+                               plot = FALSE)
+
+rv_values_eth <- unlist(eth_rv$ETH)
+rv_dates_eth <- seq.Date(from = as.Date("2023-11-01"), by = "day", length.out = 546)
+eth_rv_df <- data.frame(Date = rv_dates_eth, RV_1min = rv_values_eth)
+
+write_csv(eth_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/eth_rv_df.csv")
+
 
 
 
