@@ -12,11 +12,11 @@ library(dplyr)
 library(ggplot2)
 
 # Audrino's packages
-library(fBasics) #Load the package fBasics
+library(fBasics)  # Load the package fBasics
 library(zoo)
-library(fGarch) #Load the package for ARCH/GARCH estimation
+library(fGarch)   # Load the package for ARCH/GARCH estimation
 library(tseries)
-library(car) #consistent standard errors
+library(car)      # Consistent standard errors
 library(systemfit)
 library(mvtnorm)
 library(quadprog)
@@ -136,152 +136,45 @@ rho=function(x,h)
 n1.acf=function(x,main=NULL,method="NP")
 {
   n=length(x)
-  nlag=40
+  nlag=as.integer(min(10*log10(n),n-1))
   acf.val=sapply(c(1:nlag),function(h) rho(x,h))
   x2=x^2
   var= 1+(sapply(c(1:nlag),function(h) gamma(x2,h)))/gamma(x,0)^2
   band=sqrt(var/n)
   minval=1.2*min(acf.val,-1.96*band,-1.96/sqrt(n))
   maxval=1.2*max(acf.val,1.96*band,1.96/sqrt(n))
-  acf(x,lag.max=nlag,xlab="Lag",ylab="Sample autocorrelations",ylim=c(minval,maxval),main=main)
+  acf(x,xlab="Lag",ylab="Sample autocorrelations",ylim=c(minval,maxval),main=main)
   lines(c(1:nlag),-1.96*band,lty=1,col="red")
   lines(c(1:nlag),1.96*band,lty=1,col="red")
 }
 
+
 #-----------
-# Work-around
+# PACF plot
 #-----------
-n2.acf = function(x, main = NULL, method = "NP")
-{
-  n = length(x)
-  nlag = 40
+n1.pacf <- function(x, max_lag = 20, main = "Partial Autocorrelation Function") {
+  # Calculate PACF values
+  pacf_result <- pacf(x, lag.max = max_lag, plot = FALSE)
+  pacf_values <- pacf_result$acf
   
-  # Calculate autocorrelations manually 
-  acf.val = sapply(c(1:nlag), function(h) rho(x, h))
+  # Calculate standard confidence bands
+  n <- length(x)
+  conf_band <- 1.96/sqrt(n)
   
-  # Calculate robust bands
-  x2 = x^2
-  var = 1 + (sapply(c(1:nlag), function(h) gamma(x2, h))) / gamma(x, 0)^2
-  band = sqrt(var/n)
-  
-  # Calculate regular confidence band for comparison
-  std.band = 1.96/sqrt(n)
-  
-  # Set plot limits
-  minval = 1.2 * min(acf.val, -1.96 * band, -std.band)
-  maxval = 1.2 * max(acf.val, 1.96 * band, std.band)
-  
-  # Calculate ACF using R's function but don't plot it
-  acf_obj = acf(x, lag.max = nlag, plot = FALSE)
-  
-  # Manual plotting
-  plot(0:nlag, acf_obj$acf, type = "h", 
-       xlab = "Lag", ylab = "Sample autocorrelations",
-       ylim = c(minval, maxval), main = main)
+  # Create plot
+  plot(1:max_lag, pacf_values, type = "h", 
+       xlab = "Lag", ylab = "Partial Autocorrelation",
+       main = main)
   
   # Add reference line at zero
-  abline(h = 0)
+  abline(h = 0, lty = 3)
   
-  # Add the robust confidence bands
-  lines(1:nlag, 1.96 * band, lty = 1, col = "red")
-  lines(1:nlag, -1.96 * band, lty = 1, col = "red")
+  # Add confidence bands
+  abline(h = conf_band, lty = 2, col = "blue")
+  abline(h = -conf_band, lty = 2, col = "blue")
   
-  # Optionally add standard bands for comparison
-  abline(h = std.band, lty = 2, col = "blue")
-  abline(h = -std.band, lty = 2, col = "blue")
-}
-
-#-----------
-# Simplified robust ACF following Francq & Zakoian (2009)
-#-----------
-simple_robust_acf = function(x, main = NULL, lags = 30) {
-  # Center the series
-  x = x - mean(x)
-  n = length(x)
-  
-  # Get the ACF values using acf() for convenience
-  acf_obj = acf(x, lag.max = lags, plot = FALSE)
-  acf_values = as.vector(acf_obj$acf[-1])  # Remove lag 0
-  
-  # Standard error for standard bands
-  std_se = 1/sqrt(n)
-  
-  # Create the plot without confidence bands
-  plot(0:lags, c(1, acf_values), type = "h",
-       ylim = c(-0.2, 1),
-       xlab = "Lag", ylab = "ACF", main = main)
-  abline(h = 0)
-  
-  # Add standard confidence bands
-  abline(h = 1.96 * std_se, lty = 2, col = "blue")
-  abline(h = -1.96 * std_se, lty = 2, col = "blue")
-  
-  # Add simple scaled bands for GARCH effects (approximately 2x the standard)
-  abline(h = 3.92 * std_se, col = "red")  # 2x the standard
-  abline(h = -3.92 * std_se, col = "red") # 2x the standard
-  
-  cat("Standard 95% bounds: ±", round(1.96 * std_se, 4), "\n")
-  cat("Robust 95% bounds: ±", round(3.92 * std_se, 4), "\n")
-}
-
-#-----------
-# Robust PACF plot
-#-----------
-n1.pacf=function(x,main=NULL,method="NP")
-{
-  n=length(x)
-  nlag=40
-  pacf_obj = pacf(x, lag.max = nlag, plot = FALSE)
-  pacf.val = pacf_obj$acf
-  x2=x^2
-  var= 1+(sapply(c(1:nlag),function(h) gamma(x2,h)))/gamma(x,0)^2
-  band=sqrt(var/n)
-  minval=1.2*min(pacf.val,-1.96*band,-1.96/sqrt(n))
-  maxval=1.2*max(pacf.val,1.96*band,1.96/sqrt(n))
-  pacf(x,lag.max=nlag,xlab="Lag",ylab="Sample partial autocorrelations",ylim=c(minval,maxval),main=main)
-  lines(c(1:nlag),-1.96*band,lty=1,col="red")
-  lines(c(1:nlag),1.96*band,lty=1,col="red")
-}
-
-#-----------
-# Work-around PACF
-#-----------
-n2.pacf = function(x, main = NULL, method = "NP")
-{
-  n = length(x)
-  nlag = 40
-  
-  # Calculate robust bands
-  x2 = x^2
-  var = 1 + (sapply(c(1:nlag), function(h) gamma(x2, h))) / gamma(x, 0)^2
-  band = sqrt(var/n)
-  
-  # Calculate regular confidence band for comparison
-  std.band = 1.96/sqrt(n)
-  
-  # Calculate PACF using R's function but don't plot it
-  pacf_obj = pacf(x, lag.max = nlag, plot = FALSE)
-  pacf.val = pacf_obj$acf
-  
-  # Set plot limits
-  minval = 1.2 * min(pacf.val, -1.96 * band, -std.band)
-  maxval = 1.2 * max(pacf.val, 1.96 * band, std.band)
-  
-  # Manual plotting
-  plot(1:nlag, pacf.val, type = "h", 
-       xlab = "Lag", ylab = "Sample partial autocorrelations",
-       ylim = c(minval, maxval), main = main)
-  
-  # Add reference line at zero
-  abline(h = 0)
-  
-  # Add the robust confidence bands
-  lines(1:nlag, 1.96 * band, lty = 1, col = "red")
-  lines(1:nlag, -1.96 * band, lty = 1, col = "red")
-  
-  # Add standard bands for comparison
-  abline(h = std.band, lty = 2, col = "blue")
-  abline(h = -std.band, lty = 2, col = "blue")
+  # Return PACF values invisibly
+  invisible(pacf_values)
 }
 
 #-----------
@@ -360,20 +253,20 @@ volatility_signature <- function(data,
   # ---------------
   
   if (plot) {
+    # Set fixed y-axis limits to match the image
+    ylim_values <- c(0.000, 0.001)
+    
     plot(min_interval:max_interval, colMeans(do.call(rbind, rv_list)), type = "l", 
          main = paste("Volatility signature plot:", asset_name,
                       "\nFrom:", start_date, "for", n_days, "days"),
          xlab = "Minutes",
          ylab = "Sample RV",
          col = "black", 
-         lwd = 1.5)
+         lwd = 1.5,
+         ylim = ylim_values)  # Added ylim parameter here
     
     abline(h = mean(colMeans(do.call(rbind, rv_list))[floor(max_interval / 2):max_interval]), col = "grey", lty = "dotted")
   }
-  
-  
-  return(setNames(list(rv_list), asset_name))
-  
 }
 
 # -----------------------------------------------------------------------------
@@ -461,11 +354,22 @@ write_csv(eth_full, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~C
 
 # ETH plot
 
-
 # ------------------------------
 # Preprocess data
 # ------------------------------
 
+# Load processed data
+btc_full <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/btc_full.csv")
+btc_full <- btc_full %>%
+  rename(`Open Time` = `Open.Time`) %>%
+  mutate(`Open Time` = ymd_hms(`Open Time`))
+
+eth_full <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/eth_full.csv")
+eth_full <- eth_full %>%
+  rename(`Open Time` = `Open.Time`) %>%
+  mutate(`Open Time` = ymd_hms(`Open Time`))
+
+# Define split dayte
 split_date <- ymd("2023-10-31")
 
 # Split and aggregate prices at different frequencies
@@ -535,6 +439,10 @@ eth_ret_6hourly <- ROC(eth_train_6hourly$Close, type = "discrete")[-1]
 
 returns_6hourly_df <- data.frame(SixHour = btc_train_6hourly$SixHour[-1], BTC = btc_ret_6hourly, ETH = eth_ret_6hourly)
 write_csv(returns_6hourly_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/train_returns_6hourly.csv")
+
+returns_hourly_df_2 <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/train_returns_hourly.csv")
+
+
 
 # ------------------------------
 # Descriptive statistics
@@ -649,60 +557,33 @@ plot_series(btc_ret_6hourly_list, "6-Hour return series BTC", "BTC return")
 plot_series(eth_ret_6hourly_list, "6-Hour return series ETH", "ETH return")
 
 
-# ACF plots
+# Robust ACF plots
 # Daily
-plot_autocorrelogram(btc_ret_daily_xts, lags = 20, title = "", squared = TRUE)
-plot_autocorrelogram(eth_ret_daily_xts, lags = 20, title = "", squared = TRUE)
+n1.acf(btc_ret_daily, main=c("BTC — daily"))
+n1.acf(eth_ret_daily, main=c("ETH — daily"))
+
 
 # 1-hour
-plot_autocorrelogram(as.vector(btc_ret_hourly_xts), lags = 20, title = "", squared = TRUE)
-plot_autocorrelogram(as.vector(eth_ret_hourly_xts), lags = 20, title = "", squared = TRUE)
+n1.acf(btc_ret_hourly, main=c("BTC — hourly"))
+n1.acf(eth_ret_hourly, main=c("ETH — hourly"))
 
 # 6-hour
-plot_autocorrelogram(as.vector(btc_ret_6hourly_xts), lags = 20, title = "", squared = TRUE)
-plot_autocorrelogram(as.vector(eth_ret_6hourly_xts), lags = 20, title = "", squared = TRUE)
+n1.acf(btc_ret_6hourly, main=c("BTC — 6 hourly"))
+n1.acf(eth_ret_6hourly, main=c("ETH — 6 hourly"))
 
 
 # PACF plots
 # Daily
-plot_partial_autocorrelogram(btc_ret_daily_xts, lags = 20, title = "", squared = FALSE)
-plot_partial_autocorrelogram(eth_ret_daily_xts, lags = 20, title = "", squared = FALSE)
+n1.pacf(btc_ret_daily, main=c("BTC — daily"))
+n1.pacf(eth_ret_daily, main=c("ETH — daily"))
 
 # 1-hour
-plot_partial_autocorrelogram(as.vector(btc_ret_hourly_xts), lags = 20, title = "", squared = FALSE)
-plot_partial_autocorrelogram(as.vector(eth_ret_hourly_xts), lags = 20, title = "", squared = FALSE)
+n1.pacf(btc_ret_hourly, main=c("BTC — hourly"))
+n1.pacf(eth_ret_hourly, main=c("ETH — hourly"))
 
 # 6-hour
-plot_partial_autocorrelogram(as.vector(btc_ret_6hourly_xts), lags = 20, title = "", squared = FALSE)
-plot_partial_autocorrelogram(as.vector(eth_ret_6hourly_xts), lags = 20, title = "", squared = FALSE)
-
-
-# Robust ACF plots
-# Daily
-n1.acf(btc_ret_daily_xts, main = c(""))
-n1.acf(eth_ret_daily_xts, main = c(""))
-
-# 1-hour
-n2.acf(btc_ret_hourly_xts, main = c(""))
-n2.acf(eth_ret_hourly_xts, main = c(""))
-
-# 6-hour
-n2.acf(btc_ret_6hourly_xts, main = c(""))
-n2.acf(eth_ret_6hourly_xts, main = c(""))
-
-
-# Robust PACF plots
-# Daily
-n1.pacf(btc_ret_daily_xts, main = c(""))
-n1.pacf(eth_ret_daily_xts, main = c(""))
-
-# 1-hour
-n2.pacf(btc_ret_hourly_xts, main = c(""))
-n2.pacf(eth_ret_hourly_xts, main = c(""))
-
-# 6-hour
-n2.pacf(btc_ret_6hourly_xts, main = c(""))
-n2.pacf(eth_ret_6hourly_xts, main = c(""))
+n1.pacf(btc_ret_6hourly, main=c("BTC — 6 hourly"))
+n1.pacf(eth_ret_6hourly, main=c("ETH — 6 hourly"))
 
 # ------------------------------
 # Diagnostics
@@ -798,7 +679,7 @@ for (start_date in start_dates_2025){
   }
 }
 
-# PLOT USED
+# PLOTS USED
 # Start date = 27 November 2023, days = 14
 volatility_signature(btc_full, 
                      asset_name = "BTC",
@@ -807,6 +688,16 @@ volatility_signature(btc_full,
                      min_interval = 1,
                      max_interval = 60,
                      plot = TRUE)
+
+volatility_signature(btc_full, 
+                     asset_name = "BTC",
+                     start_date = "2025-03-13",
+                     n_days = 14,
+                     min_interval = 1,
+                     max_interval = 60,
+                     plot = TRUE)
+
+
 
 # ETH
 # Play around with starting date and days
@@ -877,37 +768,22 @@ for (start_date in start_dates_2025){
   }
 }
 
-# Extract Realized Variances for out-of-sample testing
-# BTC - 1 minute intervals
-btc_rv <- volatility_signature(btc_full, 
-                               asset_name = "BTC",
-                               start_date = "2023-11-01",
-                               n_days = 546,
-                               min_interval = 1,
-                               max_interval = 1,
-                               plot = FALSE)
+# Plots used
+volatility_signature(eth_full, 
+                     asset_name = "ETH",
+                     start_date = "2023-09-25",
+                     n_days = 14,
+                     min_interval = 1,
+                     max_interval = 60,
+                     plot = TRUE)
 
-rv_values_btc <- unlist(btc_rv$BTC)
-rv_dates_btc <- seq.Date(from = as.Date("2023-11-01"), by = "day", length.out = 546)
-btc_rv_df <- data.frame(Date = rv_dates_btc, RV_1min = rv_values_btc)
-
-write_csv(btc_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/btc_rv_df.csv")
-
-# ETH - 1 minute intervals
-eth_rv <- volatility_signature(eth_full, 
-                               asset_name = "ETH",
-                               start_date = "2023-11-01",
-                               n_days = 546,
-                               min_interval = 1,
-                               max_interval = 1,
-                               plot = FALSE)
-
-rv_values_eth <- unlist(eth_rv$ETH)
-rv_dates_eth <- seq.Date(from = as.Date("2023-11-01"), by = "day", length.out = 546)
-eth_rv_df <- data.frame(Date = rv_dates_eth, RV_1min = rv_values_eth)
-
-write_csv(eth_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/eth_rv_df.csv")
-
+volatility_signature(eth_full, 
+                     asset_name = "ETH",
+                     start_date = "2025-03-13",
+                     n_days = 14,
+                     min_interval = 1,
+                     max_interval = 60,
+                     plot = TRUE)
 
 
 
