@@ -15,10 +15,11 @@ library(dplyr)
 library(lubridate)
 library(TTR)
 
+set.seed(42) # for filtered hist. sim.
+
 # ------------------------------
 # Returns for Model fitting
 # ------------------------------
-
 
 # Load processed data
 btc_full <- read.csv("data/btc_full.csv")
@@ -231,7 +232,7 @@ forecast_values <- numeric(length(forecast_dates))
 
 # Define model specification
 garch_spec <- ugarchspec(
-  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  variance.model = list(model = "eGARCH", garchOrder = c(1, 1)),
   mean.model = list(armaOrder = c(1, 0)),
   distribution.model = "std"
 )
@@ -262,11 +263,6 @@ print(head(garch_forecast_df))
 write.csv(garch_forecast_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALSE)
 
 # Using the build in function
-# Prepare input
-ret <- returns_model_fitting$btc_full$day
-ret <- xts(ret$Return, order.by = ret$Time)
-
-split_date <- as.Date("2023-10-31")
 
 forecast.length <- sum(index(ret) > split_date)
 window.size <- sum(index(ret) <= split_date)
@@ -296,74 +292,186 @@ write.csv(roll_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALS
 
 # Specify a two-regime sGARCH model with Student-t errors
 spec <- CreateSpec(
-  variance.spec = list(model = "sGARCH"),
+  variance.spec = list(model = "eGARCH"),
   distribution.spec = list(distribution = "std"),
   switch.spec = list(do.mix = FALSE, K = 2)  # 2 regimes, not a mixture model
 )
 
-# Fit the model to your return series
-fit <- FitML(spec = spec, data = ret)
+# Fitting conditional mean
+ar_fit <- arima(ret, order = c(1, 0, 0), include.mean = TRUE)
+ar_resid <- residuals(ar_fit)
+
+# Fitting conditional variance model
+fit <- FitML(spec = spec, data = ar_resid)
 
 # Show model summary
 summary(fit)
 
-predict(fit)
-
-
 # ------------------------------
-# Rolling 1-step-ahead MS GARCH Forecasts
+# Rolling 1-step-ahead MS-eGARCH Forecasts (residuals from AR(1))
 # ------------------------------
 
-# Load data
-ret_full <- returns_model_fitting$btc_full$day
-ret <- xts(ret_full$Return, order.by = ret_full$Time)
-split_date <- as.Date("2023-10-31")
+# Define MS-eGARCH(1,1) specification with 2 regimes
+spec <- CreateSpec(
+  variance.spec = list(model = "eGARCH"),
+  distribution.spec = list(distribution = "std"),
+  switch.spec = list(K = 2, do.mix = FALSE)
+)
 
-# Filter index of first prediction day (t+1)
-start_index <- which(index(ret) > split_date)[1]
+# Initialize storage
+sigma <- numeric(length(forecast_dates))
 
-# Initialize forecast storage
-forecast_dates <- index(ret)[start_index:length(ret)]
-forecast_values <- numeric(length(forecast_dates))
+# Rolling forecast loop
+for (i in seq_along(forecast_dates)) {
+  idx <- start_index + i - 1
+  ret_window_xts <- ret[1:(idx - 1)]  # subset xts
+  ret_window <- as.numeric(ret_window_xts)
+  
+  # Step 1: Fit AR(1) with intercept to mean
+  ar_fit <- tryCatch(arima(ret_window, order = c(1, 0, 0), include.mean = TRUE), error = function(e) NULL)
+  
+  if (!is.null(ar_fit)) {
+    ar_resid <- residuals(ar_fit)
+    
+    # Step 2: Fit MS-eGARCH to residuals
+    fit <- tryCatch(FitML(spec = spec, data = ar_resid), error = function(e) NULL)
+    
+    if (!is.null(fit)) {
+      fc <- predict(fit, nahead = 1, do.return.draw = FALSE)
+      sigma[i] <- as.numeric(fc$vol[1])
+    } else {
+      sigma[i] <- NA
+    }
+  } else {
+    sigma[i] <- NA
+  }
+}
 
-# Define model specification
-garch_spec <- ugarchspec(
-  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+# Create output
+msGarch_forecasts <- data.frame(
+  Date = forecast_dates,
+  Sigma = sigma
+)
+
+print(head(msGarch_forecasts))
+write.csv(msGarch_forecasts, "forecasts/msgarch_forecasts_btc_daily.csv", row.names = FALSE)
+
+# ------------------------------
+# Filtered Historical Simulation: AR-eGARCH (Univariate)
+# ------------------------------
+
+# Prepare returns
+ret <- returns_model_fitting$btc_full$day
+ret_xts <- xts(ret$Return, order.by = ret$Time)
+
+# Fit AR(1)-eGARCH(1,1) with Student-t errors
+spec_uni <- ugarchspec(
+  variance.model = list(model = "eGARCH", garchOrder = c(1, 1)),
   mean.model = list(armaOrder = c(1, 0)),
   distribution.model = "std"
 )
+fit_uni <- ugarchfit(spec = spec_uni, data = ret_xts)
 
-# Rolling forecast
-for (i in seq_along(forecast_dates)) {
-  idx <- start_index + i - 1
-  ret_window <- ret[1:(idx - 1)]
-  
-  fit <- tryCatch(
-    ugarchfit(spec = garch_spec, data = ret_window, solver = "hybrid"),
-    error = function(e) NULL
-  )
-  
-  if (!is.null(fit)) {
-    forecast <- ugarchforecast(fit, n.ahead = 1)
-    forecast_values[i] <- sigma(forecast)[1]
-  } else {
-    forecast_values[i] <- NA
-  }
-}
-garch_forecast_df <- data.frame(
-  Date = forecast_dates,
-  Forecast = forecast_values
+# Extract standardized residuals
+z_uni <- residuals(fit_uni, standardize = TRUE)
+
+# Forecast conditional mean and volatility
+fc_uni <- ugarchforecast(fit_uni, n.ahead = 1)
+mu_uni <- fitted(fc_uni)[1]
+sigma_uni <- sigma(fc_uni)[1]
+
+# Simulate future returns
+B <- 10000
+z_star_uni <- sample(z_uni, B, replace = TRUE)
+r_sim_uni <- mu_uni + sigma_uni * z_star_uni
+
+# Compute risk measures
+VaR_99_uni <- quantile(r_sim_uni, 0.01)
+VaR_95_uni <- quantile(r_sim_uni, 0.05)
+
+cat("AR-eGARCH VaR 1%:", round(VaR_99_uni, 4), "\n")
+cat("AR-eGARCH VaR 5%:", round(VaR_95_uni, 4), "\n")
+
+# Plot simulated return distribution
+hist(r_sim_uni, breaks = 50, col = "skyblue", main = "FHS: AR-eGARCH", xlab = "Simulated Return")
+abline(v = VaR_99_uni, col = "red", lty = 2)
+abline(v = VaR_95_uni, col = "orange", lty = 2)
+
+# ------------------------------
+# Filtered Historical Simulation: AR(1) + MS-eGARCH
+# ------------------------------
+
+# Prepare returns
+ret <- returns_model_fitting$btc_full$day
+ret_xts <- xts(ret$Return, order.by = ret$Time)
+ret_num <- as.numeric(ret_xts)
+
+# Fit AR(1) to returns
+ar_fit <- arima(ret_num, order = c(1, 0, 0), include.mean = TRUE)
+ar_resid <- residuals(ar_fit)
+
+# Fit MS-eGARCH(1,1) with Student-t errors on residuals
+spec_ms <- CreateSpec(
+  variance.spec = list(model = "eGARCH"),
+  distribution.spec = list(distribution = "std"),
+  switch.spec = list(K = 2, do.mix = FALSE)
+)
+fit_ms <- FitML(spec = spec_ms, data = ar_resid)
+
+# Extract standardized residuals
+sigma_t_ms <- Volatility(fit_ms)
+z_ms <- ar_resid / sigma_t_ms
+
+# Forecast conditional mean from AR(1)
+phi <- ar_fit$coef["ar1"]
+alpha <- if ("intercept" %in% names(ar_fit$coef)) ar_fit$coef["intercept"] else ar_fit$coef["mean"]
+r_T <- tail(ret_num, 1)
+mu_ms <- alpha + phi * r_T
+
+# Forecast conditional volatility from MS-eGARCH
+fc_ms <- predict(fit_ms, nahead = 1, do.return.draw = FALSE)
+sigma_ms <- as.numeric(fc_ms$vol)
+
+# Simulate future returns
+B <- 10000
+z_star_ms <- sample(z_ms, B, replace = TRUE)
+r_sim_ms <- mu_ms + sigma_ms * z_star_ms
+
+# Compute risk measures
+VaR_99_ms <- quantile(r_sim_ms, 0.01)
+VaR_95_ms <- quantile(r_sim_ms, 0.05)
+
+cat("MS-eGARCH VaR 1%:", round(VaR_99_ms, 4), "\n")
+cat("MS-eGARCH VaR 5%:", round(VaR_95_ms, 4), "\n")
+
+# Plot simulated return distribution
+hist(r_sim_ms, breaks = 50, col = "skyblue", main = "FHS: AR(1) + MS-eGARCH", xlab = "Simulated Return")
+abline(v = VaR_99_ms, col = "red", lty = 2)
+abline(v = VaR_95_ms, col = "orange", lty = 2)
+
+
+# ------------------------------
+# Historical Simulation: AR(1) + MS-eGARCH using simulate()
+# ------------------------------
+
+# Convert return series to numeric vector
+ret_num <- as.numeric(ret_xts)
+
+# MS eGARCH model with Student-t errors
+spec <- CreateSpec(
+  variance.spec = list(model = "eGARCH"),
+  distribution.spec = list(distribution = "std"),
+  switch.spec = list(do.mix = FALSE, K = 2)
 )
 
-print(head(garch_forecast_df))
-write.csv(garch_forecast_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALSE)
+# Step 1: Fit AR(1) with intercept to mean
+ar_fit <- arima(ret_num, order = c(1, 0, 0), include.mean = TRUE)
+ar_resid <- residuals(ar_fit)
 
-# Return forecasting using FHS: Filtered Historical Simulation
-
-
-# Filtered historical simulation
-Fit ARMA-GARCH model and extract standardized residuals
-Forecast next-period conditional mean and variance
-Simulate future returns via bootstrapped standardized residuals
-Compute quantiles / risk measures from simulated return distribution
-
+# Step 2: Fit MS-eGARCH to residuals
+fit <- FitML(spec = spec, data = ar_resid)
+fit$
+sim <- simulate(object = fit, nsim = 1L, nahead = 10L,
+                nburn = 500L)
+head(sim)
+plot(sim)
