@@ -111,61 +111,145 @@ spa <- function(per = perf, bench = 1, m = 4, obs = 546, q = 0.25, iter = 1000, 
 # Code
 # -----------------------------------------------------------------------------
 
+# -----------------------------------------------
+# BTC
+# -----------------------------------------------
+
+# Convert realized variance sequence into realized volatility sequence
+btc_rv_df$realized_vol <- sqrt(btc_rv_df$RV_1min)
+
 # ------------------------------
 # Align data
 # ------------------------------
 
-# AR(1) GARCH(1,1)
-
+# GARCH(1,1)
 # Load volatility forecasts
-btc_vol_forecast_garch11 <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/rolling_forecasts_btc_daily.csv")
-btc_vol_forecast_garch11 <- btc_vol_forecast_garch11[-nrow(btc_vol_forecast_garch11), ]
+btc_vol_forecast_garch <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/rolling_forecasts_btc_daily.csv")
 
-btc_vol_forecast_garch11 <- btc_vol_forecast_garch11$Sigma
-
-btc_vol_forecast_garch11 <- data.frame(
+# Adjust data format and structure
+btc_vol_forecast_garch <- btc_vol_forecast_garch[-nrow(btc_vol_forecast_garch), ]
+btc_vol_forecast_garch <- btc_vol_forecast_garch$Sigma
+btc_vol_forecast_garch <- data.frame(
   Date = btc_rv_df$Date,
-  forecast_vol = btc_vol_forecast_garch11
+  forecast_vol = btc_vol_forecast_garch
 )
 
-# Check length and specifications of data first
-head(btc_vol_forecast_garch11)
-tail(btc_vol_forecast_garch11)
+# Check length and specifications of data
+head(btc_vol_forecast_garch)
+tail(btc_vol_forecast_garch)
 
 head(btc_rv_df)
 tail(btc_rv_df)
 
-length(btc_vol_forecast_garch11$Date) == length(btc_rv_df$Date)
-all(btc_vol_forecast_garch11$Date == btc_rv_df$Date)
+length(btc_vol_forecast_garch$Date) == length(btc_rv_df$Date)
+all(btc_vol_forecast_garch$Date == btc_rv_df$Date)
 
-# Convert realized variance sequence into realized volatility sequence
-btc_rv_df$realized_vol <- sqrt(btc_rv_df$RV_1min)
+
+# EGARCH(,)
+# Load volatility forecasts
+btc_vol_forecast_egarch <- read.csv("")
+
+# Adjust data format and structure
+
+# Check length and specifications of data
+
+
+# SGARCH(,)
+# Load volatility forecasts
+btc_vol_forecast_sgarch <- read.csv("")
+
+# Adjust data format and structure
+
+# Check length and specifications of data
+
+
+# DCCGARCH(,)
+# Load volatility forecasts
+btc_vol_forecast_dccgarch <- read.csv("")
+
+# Adjust data format and structure
+
+# Check length and specifications of data
+
+
+# Create list with all model forecasts
+forecast_list_btc <- list(btc_vol_forecast_garch,
+                          btc_vol_forecast_egarch,
+                          btc_vol_forecast_sgarch,
+                          btc_vol_forecast_dccgarch
+                          )
+# Define model names
+model_names_btc <- c("GARCH(1,1)", "E GARCH(,)", "M GARCH(,)", "DCC GARCH (,)")
 
 # ------------------------------
 # Visual comparison
 # ------------------------------
 
 # Scatter plot comparison
-plot(btc_vol_forecast_garch11$forecast_vol, btc_rv_df$realized_vol,
-     xlab = "AR(1) GARCH(1,1) predictions", ylab = "Volatility proxy")
-abline(0, 1, lty = 3)
-
+for (i in 1:4){
+  plot(forecast_list_btc[[i]]$forecast_vol, btc_rv_df$realized_vol,
+      xlab = paste(model_names_btc[i], " predictions"), 
+      ylab = "Volatility proxy")
+  abline(0, 1, lty = 3)  
+}
 
 # Time-series plot overlap
-plot(btc_rv_df$Date, btc_rv_df$realized_vol, type = "l", col = "grey",
-     xlab = "Date", ylab = "Volatility", main = "Volatility: Forecast vs. Realized")
-lines(btc_vol_forecast_garch11$Date, btc_vol_forecast_garch11$forecast_vol, col = "blue")
-
-legend("topright",
-       legend = c("Realized Volatility", "Forecasted Volatility"),
-       col = c("grey", "blue"), lty = 1, bty = "n",
-       cex = 0.8, inset = c(0.02, 0.02))
+for (i in 1:4){
+  plot(btc_rv_df$Date, btc_rv_df$realized_vol, type = "l", col = "grey",
+       xlab = "Date", ylab = "Volatility", main = paste("Volatility:", model_names_btc[i], " Forecast vs. Realized"))
+  lines(forecast_list_btc[[i]]$Date, forecast_list_btc[[i]]$forecast_vol, col = "blue")
+  
+  legend("topright",
+         legend = c("Realized Volatility", "Forecasted Volatility"),
+         col = c("grey", "blue"), lty = 1, bty = "n",
+         cex = 0.8, inset = c(0.02, 0.02))
+}
 
 # ------------------------------
 # Mincer-Zarnowitz (MZ) Regression Test
 # ------------------------------
 
 # Classical MZ regression with robust White standard errors
+regression_results_btc <- list()
+robust_se_btc <- list()
+coefs_btc <- list()
+t_alpha_btc <- list()
+t_beta_btc <- list()
+p_alpha_btc <- list()
+p_beta_btc <- list()
+
+for (i in 1:4){
+  
+  # Run regression
+  regression_results_btc[[i]] = lm(btc_rv_df$realized_vol ~ forecast_list_btc[[i]]$forecast_vol) 
+  
+  # Get robust (White) standard errors
+  robust_se_btc[[i]] <- sqrt(diag(hccm(regression_results_btc[[i]], type = "hc0")))
+  
+  # Get coefficients
+  coefs_btc[[i]] <- coef(regression_results_btc[[i]])
+  
+  # Compute t-stats for H0: alpha = 0 and H0: beta = 1
+  t_alpha_btc[[i]] <- coefs_btc[[i]][1] / robust_se_btc[[i]][1]
+  t_beta_btc[[i]]  <- (coefs_btc[[i]][2] - 1) / robust_se_btc[[i]][2]  # <-- test for beta = 1
+  
+  # Compute corresponding p-values
+  p_alpha_btc[[i]] <- 2 * (1 - pt(abs(t_alpha_btc[[i]]), df = regression_results_btc[[i]]$df.residual))
+  p_beta_btc[[i]]  <- 2 * (1 - pt(abs(t_beta_btc[[i]]), df = regression_results_btc[[i]]$df.residual))
+  
+  # Print
+  
+  
+  
+  
+  cat(sprintf("α = %.4f (t = %.2f)%s, p = %.4f\n", coefs_btc[[i]][1], t_alpha_btc[[i]], ifelse(p_alpha_btc[[i]] < 0.01, " *", ""), p_alpha_btc[[i]]))
+  cat(sprintf("β = %.4f (t for H0: β=1 = %.2f)%s, p = %.4f\n", coefs_btc[[i]][2], t_beta_btc[[i]], ifelse(p_beta_btc[[i]] < 0.01, " *", ""), p_beta_btc[[i]]))  
+}
+
+
+
+
+
 
 # Run regression
 b = lm(btc_rv_df$realized_vol ~ btc_vol_forecast_ar1_garch11$forecast_vol) 
@@ -187,6 +271,11 @@ p_beta  <- 2 * (1 - pt(abs(t_beta), df = b$df.residual))
 # Print
 cat(sprintf("α = %.4f (t = %.2f)%s, p = %.4f\n", coefs[1], t_alpha, ifelse(p_alpha < 0.01, " *", ""), p_alpha))
 cat(sprintf("β = %.4f (t for H0: β=1 = %.2f)%s, p = %.4f\n", coefs[2], t_beta, ifelse(p_beta < 0.01, " *", ""), p_beta))
+
+
+
+
+
 
 # ------------------------------
 # Superior predictive ability (SPA)
@@ -260,22 +349,17 @@ for (loss_idx in 1:2){
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ------------------------------
 # Model confidence set (MCS)
 # ------------------------------
+
+
+
+
+
+# -----------------------------------------------
+# ETH
+# -----------------------------------------------
 
 
 
