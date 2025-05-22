@@ -229,22 +229,35 @@ colMeans(perf_mse)
 
 # Create list with both loss function matrices
 perf <- list(perf_qlike, perf_mse)
+loss_names <- c("QLIKE", "MSE")
+model_names <- c("GARCH(1,1)", "E GARCH(,)", "M GARCH(,)", "DCC GARCH (,)")
 
-# Run the SPA test, looping over each model as the benchmark
-
-for (k in 1:4)
-{
-  print(k)	
-  d = rep(0,1000)
-  s = 1
-  for (i in 1:10)
-  { 
-    #print(i)
-    e = spa(per = perf, bench = k, m = 4, obs = n, q = 0.25, iter = 100, periodogram = T)
-    d[s:(s+99)] = e$stat.boos
-    s = s+100
+# Run the SPA test, looping over each model as the benchmark using both QLIKE and MSE
+for (loss_idx in 1:2){
+  
+  cat("\n===========================\n")
+  cat("Loss function:", loss_names[loss_idx], "\n")
+  cat("===========================\n")
+  
+  for (k in 1:4){
+    
+    cat("\nBenchmark model:", model_names[k], "\n")
+    
+    d = rep(0,1000)
+    s = 1
+    
+    for (i in 1:10){ 
+      
+      #print(i)
+      e = spa(per = perf[[loss_idx]], bench = k, m = 4, obs = n, q = 0.25, iter = 100, periodogram = T)
+      d[s:(s+99)] = e$stat.boos
+      s = s+100
+    }
+    
+    p_value <- mean(d > e$stat)
+    cat("SPA p-value:", round(p_value, 4), "\n")
+    
   }
-  print(mean((d > e$stat)))
 }
 
 
