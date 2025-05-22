@@ -201,7 +201,6 @@ u <- cbind(garch11 = btc_vol_forecast_garch11$forecast_vol,
 )
 
 n <- dim(u)[1]
-perf <- matrix(,n,4)
 
 # Fill performance matrix with values of loss function
 # Standard QLIKE loss function
@@ -214,7 +213,7 @@ for (j in 1:4)
   #perf[, j] <- abs(us.stock.data$real.cov[, 6, 6]-u[, j])^2 #MSE
 }
 
-colMeans(perf)
+colMeans(perf_qlike)
 
 # MSE loss function
 perf_mse <- matrix(,n,4)
@@ -226,11 +225,13 @@ for (j in 1:4)
   perf_mse[, j] <- abs(btc_rv_df$realized_vol - u[, j])^2 #MSE
 }
 
-colMeans(perf)
+colMeans(perf_mse)
 
-
+# Create list with both loss function matrices
+perf <- list(perf_qlike, perf_mse)
 
 # Run the SPA test, looping over each model as the benchmark
+
 for (k in 1:4)
 {
   print(k)	
@@ -245,6 +246,10 @@ for (k in 1:4)
   }
   print(mean((d > e$stat)))
 }
+
+
+
+
 
 
 
