@@ -238,44 +238,9 @@ for (i in 1:4){
   p_beta_btc[[i]]  <- 2 * (1 - pt(abs(t_beta_btc[[i]]), df = regression_results_btc[[i]]$df.residual))
   
   # Print
-  
-  
-  
-  
   cat(sprintf("α = %.4f (t = %.2f)%s, p = %.4f\n", coefs_btc[[i]][1], t_alpha_btc[[i]], ifelse(p_alpha_btc[[i]] < 0.01, " *", ""), p_alpha_btc[[i]]))
   cat(sprintf("β = %.4f (t for H0: β=1 = %.2f)%s, p = %.4f\n", coefs_btc[[i]][2], t_beta_btc[[i]], ifelse(p_beta_btc[[i]] < 0.01, " *", ""), p_beta_btc[[i]]))  
 }
-
-
-
-
-
-
-# Run regression
-b = lm(btc_rv_df$realized_vol ~ btc_vol_forecast_ar1_garch11$forecast_vol) 
-
-# Get robust (White) standard errors
-robust_se <- sqrt(diag(hccm(b, type = "hc0")))
-
-# Get coefficients
-coefs <- coef(b)
-
-# Compute t-stats for H0: alpha = 0 and H0: beta = 1
-t_alpha <- coefs[1] / robust_se[1]
-t_beta  <- (coefs[2] - 1) / robust_se[2]  # <-- test for beta = 1
-
-# Compute corresponding p-values
-p_alpha <- 2 * (1 - pt(abs(t_alpha), df = b$df.residual))
-p_beta  <- 2 * (1 - pt(abs(t_beta), df = b$df.residual))
-
-# Print
-cat(sprintf("α = %.4f (t = %.2f)%s, p = %.4f\n", coefs[1], t_alpha, ifelse(p_alpha < 0.01, " *", ""), p_alpha))
-cat(sprintf("β = %.4f (t for H0: β=1 = %.2f)%s, p = %.4f\n", coefs[2], t_beta, ifelse(p_beta < 0.01, " *", ""), p_beta))
-
-
-
-
-
 
 # ------------------------------
 # Superior predictive ability (SPA)
