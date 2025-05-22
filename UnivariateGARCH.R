@@ -10,8 +10,72 @@ library(quantmod)
 library(sandwich)
 library(lmtest)
 library(stringr)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(TTR)
 
-ret <- na.omit(read.zoo("data/train_returns.csv", header = TRUE, sep = ",", format = "%Y-%m-%d", index.column = "Date"))
+# ------------------------------
+# Returns for Model fitting
+# ------------------------------
+
+
+# Load processed data
+btc_full <- read.csv("data/btc_full.csv")
+btc_full <- btc_full %>%
+  rename(`Open Time` = `Open.Time`) %>%
+  mutate(`Open Time` = ymd_hms(`Open Time`))
+
+eth_full <- read.csv("data/eth_full.csv")
+eth_full <- eth_full %>%
+  rename(`Open Time` = `Open.Time`) %>%
+  mutate(`Open Time` = ymd_hms(`Open Time`))
+
+
+# Define split date
+split_date <- ymd("2023-10-31")
+
+# Split data
+btc_train <- btc_full %>% filter(`Open Time` <= split_date)
+btc_test  <- btc_full %>% filter(`Open Time` > split_date)
+eth_train <- eth_full %>% filter(`Open Time` <= split_date)
+eth_test  <- eth_full %>% filter(`Open Time` > split_date)
+
+# Helper function for returns at different frequencies
+aggregate_returns <- function(df, time_col, freq) {
+  df <- df %>%
+    mutate(Time = floor_date(!!sym(time_col), unit = freq)) %>%
+    group_by(Time) %>%
+    summarise(Close = last(Close), .groups = "drop") %>%
+    drop_na()
+  ret <- ROC(df$Close, type = "discrete")[-1]
+  df_ret <- data.frame(Time = df$Time[-1], Return = ret)
+  return(df_ret)
+}
+
+# Frequencies to compute
+frequencies <- c("day", "6 hours", "hour")
+
+# Compute for BTC and ETH, full / train / test
+returns_model_fitting <- list(
+  btc_full = lapply(frequencies, function(f) aggregate_returns(btc_full, "Open Time", f)),
+  btc_train = lapply(frequencies, function(f) aggregate_returns(btc_train, "Open Time", f)),
+  btc_test = lapply(frequencies, function(f) aggregate_returns(btc_test, "Open Time", f)),
+  eth_full = lapply(frequencies, function(f) aggregate_returns(eth_full, "Open Time", f)),
+  eth_train = lapply(frequencies, function(f) aggregate_returns(eth_train, "Open Time", f)),
+  eth_test = lapply(frequencies, function(f) aggregate_returns(eth_test, "Open Time", f))
+)
+
+names(returns_model_fitting$btc_full) <- frequencies
+names(returns_model_fitting$btc_train) <- frequencies
+names(returns_model_fitting$btc_test) <- frequencies
+names(returns_model_fitting$eth_full) <- frequencies
+names(returns_model_fitting$eth_train) <- frequencies
+names(returns_model_fitting$eth_test) <- frequencies
+
+
+# Select asset, select frequency, select, subset (train, test, full sample)
+ret <- returns_model_fitting$btc_train$day
 ret <- as.xts(ret)
 
 
@@ -19,7 +83,7 @@ ret <- as.xts(ret)
 model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
                     mean.model = list(armaOrder = c(1, 0)),
                     distribution.model = "std")
-fit <- ugarchfit(spec = model, data = ret[, "BTC"])
+fit <- ugarchfit(spec = model, data = ret)
 
 
 max_p <- 1
@@ -146,11 +210,19 @@ if (!is.null(best_fit)) {
   print("No valid model was fit for BTC.")
 }
 
+
+# Select asset, select frequency, select, subset (train, test, full sample)
+ret <- returns_model_fitting$btc_train$day
+ret <- as.xts(ret)
+
+
 # Univariate GARCH model forecasting
 model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
                     mean.model = list(armaOrder = c(1, 0)),
                     distribution.model = "std")
-fit <- ugarchfit(spec = model, data = ret[, "BTC"])
+fit <- ugarchfit(spec = model, data = ret)
+
+
 
 
 ###
@@ -205,6 +277,9 @@ plot(sim, type = "l", main = "Simulated MS-GARCH Returns")
 # Univariate GARCH model
 
 # Univariate MS GARCH model
+
+
+# Filtered historical simulation
 Fit ARMA-GARCH model and extract standardized residuals
 Forecast next-period conditional mean and variance
 Simulate future returns via bootstrapped standardized residuals
