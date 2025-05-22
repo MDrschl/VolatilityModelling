@@ -145,3 +145,68 @@ if (!is.null(best_fit)) {
 } else {
   print("No valid model was fit for BTC.")
 }
+
+# Univariate GARCH model forecasting
+model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+                    mean.model = list(armaOrder = c(1, 0)),
+                    distribution.model = "std")
+fit <- ugarchfit(spec = model, data = ret[, "BTC"])
+
+
+###
+roll <- ugarchroll(
+  spec, 
+  data = returns,
+  n.ahead = 1,
+  forecast.length = 250,
+  refit.every = 1,
+  refit.window = "moving",
+  window.size = 1000,
+  solver = "hybrid",
+  calculate.VaR = TRUE,
+  VaR.alpha = c(0.01, 0.05)
+)
+
+
+
+# Univariate MS GARCH forecasting
+
+# Specify a two-regime sGARCH model with Student-t errors
+spec <- CreateSpec(
+  variance.spec = list(model = "sGARCH"),
+  distribution.spec = list(distribution = "std"),
+  switch.spec = list(do.mix = FALSE, K = 2)  # 2 regimes, not a mixture model
+)
+
+# Fit the model to your return series
+fit <- FitML(spec = spec, data = ret)
+
+# Show model summary
+summary(fit)
+
+# Plot smoothed regime probabilities
+par(mfrow = c(2, 1))
+plot(fit, which = "smoothed")   # Posterior regime probabilities
+plot(fit, which = "conditional.sd")  # Regime-weighted conditional volatility
+
+# One-step ahead volatility forecast (regime-weighted)
+forecast <- Predict(spec, par = Coef(fit), data = ret, nahead = 1)
+print(forecast)
+
+plot(forecast)
+
+
+sim <- Sim(spec = spec, par = Coef(fit), n = 1000)
+plot(sim, type = "l", main = "Simulated MS-GARCH Returns")
+
+
+# Return forecasting using FHS: Filtered Historical Simulation
+
+# Univariate GARCH model
+
+# Univariate MS GARCH model
+Fit ARMA-GARCH model and extract standardized residuals
+Forecast next-period conditional mean and variance
+Simulate future returns via bootstrapped standardized residuals
+Compute quantiles / risk measures from simulated return distribution
+
