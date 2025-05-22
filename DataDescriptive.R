@@ -279,7 +279,7 @@ volatility_signature <- function(data,
 
 # BTC
 # Load raw data
-btc_raw <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/BTCUSDT_1m.csv")
+btc_raw <- read.csv("data/BTCUSDT_1m.csv")
 
 # Check structure and unique timestamps
 str(btc_raw)
@@ -310,7 +310,7 @@ btc_full <- btc_raw_clean %>%
 
 # ETH
 # Load raw data
-eth_raw <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/ETHUSDT_1m.csv")
+eth_raw <- read.csv("data/ETHUSDT_1m.csv")
 
 # Check structure and unique timestamps
 str(eth_raw)
@@ -344,9 +344,9 @@ summary(btc_full)
 summary(eth_full)
 
 # Save cleaned price series
-write_csv(btc_full, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/btc_full.csv")
+write_csv(btc_full, "data/btc_full.csv")
 
-write_csv(eth_full, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/eth_full.csv")
+write_csv(eth_full, "data/eth_full.csv")
 
 # Plot minute level prices
 # BTC plot
@@ -359,12 +359,12 @@ write_csv(eth_full, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~C
 # ------------------------------
 
 # Load processed data
-btc_full <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/btc_full.csv")
+btc_full <- read.csv("data/btc_full.csv")
 btc_full <- btc_full %>%
   rename(`Open Time` = `Open.Time`) %>%
   mutate(`Open Time` = ymd_hms(`Open Time`))
 
-eth_full <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/eth_full.csv")
+eth_full <- read.csv("data/eth_full.csv")
 eth_full <- eth_full %>%
   rename(`Open Time` = `Open.Time`) %>%
   mutate(`Open Time` = ymd_hms(`Open Time`))
@@ -424,23 +424,23 @@ btc_ret_daily <- ROC(btc_train_daily$Close, type = "discrete")[-1]
 eth_ret_daily <- ROC(eth_train_daily$Close, type = "discrete")[-1]
 
 returns_daily_df <- data.frame(Date = btc_train_daily$Date[-1], BTC = btc_ret_daily, ETH = eth_ret_daily)
-write_csv(returns_daily_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/train_returns_daily.csv")
+write_csv(returns_daily_df, "data/train_returns_daily.csv")
 
 # 1-hour
 btc_ret_hourly <- ROC(btc_train_hourly$Close, type = "discrete")[-1]
 eth_ret_hourly <- ROC(eth_train_hourly$Close, type = "discrete")[-1]
 
 returns_hourly_df <- data.frame(Hour = btc_train_hourly$Hour[-1], BTC = btc_ret_hourly, ETH = eth_ret_hourly)
-write_csv(returns_hourly_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/train_returns_hourly.csv")
+write_csv(returns_hourly_df, "data/train_returns_hourly.csv")
 
 # 6-hour
 btc_ret_6hourly <- ROC(btc_train_6hourly$Close, type = "discrete")[-1]
 eth_ret_6hourly <- ROC(eth_train_6hourly$Close, type = "discrete")[-1]
 
 returns_6hourly_df <- data.frame(SixHour = btc_train_6hourly$SixHour[-1], BTC = btc_ret_6hourly, ETH = eth_ret_6hourly)
-write_csv(returns_6hourly_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/train_returns_6hourly.csv")
+write_csv(returns_6hourly_df, "data/train_returns_6hourly.csv")
 
-returns_hourly_df_2 <- read.csv("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/data/train_returns_hourly.csv")
+returns_hourly_df_2 <- read.csv("data/train_returns_hourly.csv")
 
 
 
