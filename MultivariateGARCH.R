@@ -137,11 +137,11 @@ spec <- dccspec(
                mean.model = list(armaOrder = c(1, 0)),
                distribution.model = "std"))),
   dccOrder = c(1,1),
-  distribution = dist)
+  distribution = "mvt")
 
 fit <- dccfit(spec, data = multiReturns)
-summary(fit)
-
+print(fit)
+plot(fit)
 correlation <- rcor(fit)
 
 
