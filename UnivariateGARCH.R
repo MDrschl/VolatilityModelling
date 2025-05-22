@@ -79,13 +79,6 @@ ret <- returns_model_fitting$btc_train$day
 ret <- as.xts(ret)
 
 
-# Simple example using an ARMA (1,0) GARCH (1,1) for the BTC return series
-model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
-                    mean.model = list(armaOrder = c(1, 0)),
-                    distribution.model = "std")
-fit <- ugarchfit(spec = model, data = ret)
-
-
 max_p <- 1
 max_q <- 1
 max_r <- 3
@@ -209,39 +202,97 @@ if (!is.null(best_fit)) {
 } else {
   print("No valid model was fit for BTC.")
 }
+# ------------------------------
+# GARCH Fitting
+# ------------------------------
 
-
-# Select asset, select frequency, select, subset (train, test, full sample)
-ret <- returns_model_fitting$btc_train$day
-ret <- as.xts(ret)
-
-
-# Univariate GARCH model forecasting
+# Simple example using an ARMA (1,0) GARCH (1,1) for the BTC return series
 model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
                     mean.model = list(armaOrder = c(1, 0)),
                     distribution.model = "std")
 fit <- ugarchfit(spec = model, data = ret)
 
 
+# ------------------------------
+# Rolling 1-step-ahead GARCH Forecasts
+# ------------------------------
 
+# Load data
+ret_full <- returns_model_fitting$btc_full$day
+ret <- xts(ret_full$Return, order.by = ret_full$Time)
+split_date <- as.Date("2023-10-31")
 
-###
-roll <- ugarchroll(
-  spec, 
-  data = returns,
-  n.ahead = 1,
-  forecast.length = 250,
-  refit.every = 1,
-  refit.window = "moving",
-  window.size = 1000,
-  solver = "hybrid",
-  calculate.VaR = TRUE,
-  VaR.alpha = c(0.01, 0.05)
+# Filter index of first prediction day (t+1)
+start_index <- which(index(ret) > split_date)[1]
+
+# Initialize forecast storage
+forecast_dates <- index(ret)[start_index:length(ret)]
+forecast_values <- numeric(length(forecast_dates))
+
+# Define model specification
+garch_spec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 0)),
+  distribution.model = "std"
 )
 
+# Rolling forecast
+for (i in seq_along(forecast_dates)) {
+  idx <- start_index + i - 1
+  ret_window <- ret[1:(idx - 1)]
+  
+  fit <- tryCatch(
+    ugarchfit(spec = garch_spec, data = ret_window, solver = "hybrid"),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(fit)) {
+    forecast <- ugarchforecast(fit, n.ahead = 1)
+    forecast_values[i] <- sigma(forecast)[1]
+  } else {
+    forecast_values[i] <- NA
+  }
+}
+garch_forecast_df <- data.frame(
+  Date = forecast_dates,
+  Forecast = forecast_values
+)
+
+print(head(garch_forecast_df))
+write.csv(garch_forecast_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALSE)
+
+# Using the build in function
+# Prepare input
+ret <- returns_model_fitting$btc_full$day
+ret <- xts(ret$Return, order.by = ret$Time)
+
+split_date <- as.Date("2023-10-31")
+
+forecast.length <- sum(index(ret) > split_date)
+window.size <- sum(index(ret) <= split_date)
+
+# Run rolling forecast
+roll <- ugarchroll(
+  spec = garch_spec,
+  data = ret,
+  n.ahead = 1,
+  forecast.length = forecast.length,
+  refit.every = 7,
+  refit.window = "moving",
+  window.size = window.size,
+  calculate.VaR = TRUE,
+  VaR.alpha = c(0.01, 0.05),
+  solver = "hybrid"
+)
+
+roll_df <- as.data.frame(roll)
+print(head(roll_df))
+write.csv(roll_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALSE)
 
 
-# Univariate MS GARCH forecasting
+# ------------------------------
+# MS GARCH Fitting
+# ------------------------------
 
 # Specify a two-regime sGARCH model with Student-t errors
 spec <- CreateSpec(
@@ -256,27 +307,58 @@ fit <- FitML(spec = spec, data = ret)
 # Show model summary
 summary(fit)
 
-# Plot smoothed regime probabilities
-par(mfrow = c(2, 1))
-plot(fit, which = "smoothed")   # Posterior regime probabilities
-plot(fit, which = "conditional.sd")  # Regime-weighted conditional volatility
-
-# One-step ahead volatility forecast (regime-weighted)
-forecast <- Predict(spec, par = Coef(fit), data = ret, nahead = 1)
-print(forecast)
-
-plot(forecast)
+predict(fit)
 
 
-sim <- Sim(spec = spec, par = Coef(fit), n = 1000)
-plot(sim, type = "l", main = "Simulated MS-GARCH Returns")
+# ------------------------------
+# Rolling 1-step-ahead MS GARCH Forecasts
+# ------------------------------
 
+# Load data
+ret_full <- returns_model_fitting$btc_full$day
+ret <- xts(ret_full$Return, order.by = ret_full$Time)
+split_date <- as.Date("2023-10-31")
+
+# Filter index of first prediction day (t+1)
+start_index <- which(index(ret) > split_date)[1]
+
+# Initialize forecast storage
+forecast_dates <- index(ret)[start_index:length(ret)]
+forecast_values <- numeric(length(forecast_dates))
+
+# Define model specification
+garch_spec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 0)),
+  distribution.model = "std"
+)
+
+# Rolling forecast
+for (i in seq_along(forecast_dates)) {
+  idx <- start_index + i - 1
+  ret_window <- ret[1:(idx - 1)]
+  
+  fit <- tryCatch(
+    ugarchfit(spec = garch_spec, data = ret_window, solver = "hybrid"),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(fit)) {
+    forecast <- ugarchforecast(fit, n.ahead = 1)
+    forecast_values[i] <- sigma(forecast)[1]
+  } else {
+    forecast_values[i] <- NA
+  }
+}
+garch_forecast_df <- data.frame(
+  Date = forecast_dates,
+  Forecast = forecast_values
+)
+
+print(head(garch_forecast_df))
+write.csv(garch_forecast_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALSE)
 
 # Return forecasting using FHS: Filtered Historical Simulation
-
-# Univariate GARCH model
-
-# Univariate MS GARCH model
 
 
 # Filtered historical simulation
