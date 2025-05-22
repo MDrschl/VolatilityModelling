@@ -46,14 +46,16 @@ eth_test  <- eth_full %>% filter(`Open Time` > split_date)
 # Helper function for returns at different frequencies
 aggregate_returns <- function(df, time_col, freq) {
   df <- df %>%
-    mutate(Time = floor_date(!!sym(time_col), unit = freq)) %>%
+    mutate(Time = lubridate::floor_date(!!sym(time_col), unit = freq)) %>%
     group_by(Time) %>%
-    summarise(Close = last(Close), .groups = "drop") %>%
+    summarise(Close = dplyr::last(Close[!is.na(Close)]), .groups = "drop") %>%
     drop_na()
-  ret <- ROC(df$Close, type = "discrete")[-1]
+  
+  ret <- TTR::ROC(df$Close, type = "discrete")[-1]
   df_ret <- data.frame(Time = df$Time[-1], Return = ret)
   return(df_ret)
 }
+
 
 # Frequencies to compute
 frequencies <- c("day", "6 hours", "hour")
@@ -213,7 +215,6 @@ model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)
                     mean.model = list(armaOrder = c(1, 0)),
                     distribution.model = "std")
 fit <- ugarchfit(spec = model, data = ret)
-
 
 # ------------------------------
 # Rolling 1-step-ahead GARCH Forecasts
