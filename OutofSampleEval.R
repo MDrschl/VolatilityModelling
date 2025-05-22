@@ -794,28 +794,3 @@ mcs_mse_manual_10_eth <- mcs_test(perf_mse_eth, alpha = 0.10, B = 500, model_nam
 cat("\nMCS for MSE (10% level):\n")
 cat("Models in MCS:", paste(model_names_eth[1:3][mcs_mse_manual_10_eth$MCS], collapse = ", "), "\n")
 cat("Models eliminated:", paste(model_names_eth[1:3][mcs_mse_manual_10_eth$eliminated], collapse = ", "), "\n")
-
-
-# Final check
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
