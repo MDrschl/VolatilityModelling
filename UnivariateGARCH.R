@@ -14,6 +14,7 @@ library(readr)
 library(dplyr)
 library(lubridate)
 library(TTR)
+library(MSGARCH)
 
 set.seed(42) # for filtered hist. sim.
 
