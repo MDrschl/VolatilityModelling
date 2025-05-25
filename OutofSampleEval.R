@@ -323,7 +323,7 @@ forecast_list_btc <- list(btc_vol_forecast_garch,
                           btc_vol_forecast_egarch,
                           btc_vol_forecast_msgarch,
                           btc_vol_forecast_dccgarch
-                          )
+)
 #for (i in 1:4) {
 #  forecast_list_btc[[i]]$Date <- as.Date(forecast_list_btc[[i]]$Date)
 #}
@@ -339,9 +339,9 @@ model_names_btc <- c("GARCH(1,1)", "EGARCH(1,1)", "MSGARCH(1,1)", "DCC-GARCH(1,1
 
 for (i in 1:4){
   plot(forecast_list_btc[[i]]$forecast_vol, btc_rv_df$realized_vol,
-      xlab = paste(model_names_btc[i], " predictions"), 
-      ylab = "Volatility proxy",
-      main = "BTC")
+       xlab = paste(model_names_btc[i], " predictions"), 
+       ylab = "Volatility proxy",
+       main = "BTC")
   abline(0, 1, lty = 3)  
 }
 
@@ -427,7 +427,7 @@ for (i in 1:4){
   # Compute corresponding p-values
   p_alpha_btc[[i]] <- 2 * (1 - pt(abs(t_alpha_btc[[i]]), df = regression_results_btc[[i]]$df.residual))
   p_beta_btc[[i]]  <- 2 * (1 - pt(abs(t_beta_btc[[i]]), df = regression_results_btc[[i]]$df.residual))
-
+  
 }
 
 # Summary table

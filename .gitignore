@@ -1,2 +1,5 @@
+data/*.csv
+.RData
+.RData
 .DS_Store
-.Rhistory 
+.Rhistory

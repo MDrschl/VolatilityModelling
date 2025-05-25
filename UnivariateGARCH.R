@@ -15,6 +15,7 @@ library(dplyr)
 library(lubridate)
 library(TTR)
 library(MSGARCH)
+library(tidyr)
 
 set.seed(42) # for filtered hist. sim.
 
@@ -79,7 +80,7 @@ names(returns_model_fitting$eth_test) <- frequencies
 
 
 # Select asset, select frequency, select, subset (train, test, full sample)
-ret <- returns_model_fitting$btc_train$day
+ret <- returns_model_fitting$eth_train$day
 ret <- as.xts(ret)
 
 
@@ -147,8 +148,8 @@ for (col in colnames(ret)) {
           fit <- tryCatch(ugarchfit(spec, series), error = function(e) NULL)
           
           if (!is.null(fit)) {
-            aic <- -2*fit@fit$LLH + 2*(r+s+p+q+1)
-            bic <- -2*fit@fit$LLH + (r+s+p+q+1)*log(length(series))
+            aic <- -2*fit@fit$LLH + length(fit@fit$coef)
+            bic <- -2*fit@fit$LLH + length(fit@fit$coef)*log(length(series))
             ll <- fit@fit$LLH
             
             aic_matrix[p + 1, q + 1] <- aic
@@ -210,17 +211,119 @@ if (!is.null(best_fit)) {
 # GARCH Fitting
 # ------------------------------
 
+# Select frequ and asset
+ret <- returns_model_fitting$eth_train$`6 hours`
+ret <- as.xts(ret)
+
+
 # Simple example using an ARMA (1,0) GARCH (1,1) for the BTC return series
-model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+model <- ugarchspec(variance.model = list(model = "gjrGARCH", garchOrder = c(2, 2)),
                     mean.model = list(armaOrder = c(1, 0)),
                     distribution.model = "std")
 fit <- ugarchfit(spec = model, data = ret)
+
+# Params
+print(fit)
+
+# Output table
+bic <- -2*fit@fit$LLH + length(fit@fit$coef)*log(length(ret))
+aic <- -2*fit@fit$LLH + length(fit@fit$coef)
+llh <- fit@fit$LLH
+ml_val <- Box.test(fit@fit$z^2, lag = 30, type = "Ljung-Box")$p.value
+lb_val <- Box.test(fit@fit$z, lag = 30, type = "Ljung-Box")$p.value
+
+
+
+# Output plots: 2x2 grid
+resid_std <- fit@fit$z
+df <- coef(fit)["shape"]
+
+plot(fit@fit$z)
+qqplot(qt(ppoints(length(resid_std)), df = df), resid_std,
+       main = "Q-Q Plot vs Student-t Distribution",
+       xlab = "Theoretical Quantiles (t-distribution)",
+       ylab = "Standardized Residuals")
+acf(fit@fit$z)
+acf(fit@fit$z^2)
+
+# Looping over several model types and frequencies
+
+# Define model types
+model_types <- c("sGARCH", "eGARCH", "fGARCH", "gjrGARCH", "MS-GARCH")
+frequencies <- names(returns_model_fitting$btc_train)
+
+# Initialize AIC results table
+bic_results <- data.frame(matrix(NA, nrow = length(frequencies), ncol = length(model_types)))
+rownames(bic_results) <- frequencies
+colnames(bic_results) <- model_types
+
+# Loop through each frequency
+for (freq in frequencies) {
+  cat("Processing", freq, "\n")
+  ret <- returns_model_fitting$btc_train[[freq]]
+  ret <- as.xts(ret)
+  
+  for (model_type in model_types[1:4]) {
+    if (model_type == "fGARCH") {
+      spec <- ugarchspec(
+        variance.model = list(model = model_type, garchOrder = c(1, 1), submodel = "TGARCH"),
+        mean.model = list(armaOrder = c(1, 0)),
+        distribution.model = "std"
+      )
+    } else {
+      spec <- ugarchspec(
+        variance.model = list(model = model_type, garchOrder = c(1, 1)),
+        mean.model = list(armaOrder = c(1, 0)),
+        distribution.model = "std"
+      )
+    }
+    
+    fit <- tryCatch(ugarchfit(spec = spec, data = ret, solver = "hybrid"),
+                    error = function(e) NULL)
+    
+    if (!is.null(fit)) {
+      bic_val <- -2*fit@fit$LLH + length(fit@fit$coef)*log(length(ret))
+      bic_results[freq, model_type] <- bic_val
+    }
+  }
+  
+  
+  ## MSGARCH model
+  # Fit AR(1) model to get residuals for conditional variance estimation
+  ar_fit <- tryCatch(arima(ret, order = c(1, 0, 0), include.mean = TRUE),
+                     error = function(e) NULL)
+  if (!is.null(ar_fit)) {
+    ar_resid <- residuals(ar_fit)
+    
+    ms_spec <- CreateSpec(
+      variance.spec = list(model = "eGARCH"),
+      distribution.spec = list(distribution = "std"),
+      switch.spec = list(do.mix = FALSE, K = 2)
+    )
+    
+    ms_fit <- tryCatch(FitML(spec = ms_spec, data = ar_resid),
+                       error = function(e) NULL)
+    
+    if (!is.null(ms_fit)) {
+      llh <- ms_fit$loglik
+      k <- length(ms_fit$par)
+      n <- length(ms_fit$data)
+      
+      bic_val <- -2 * llh + log(n) * k
+      bic_results[freq, "MS-GARCH"] <- bic_val
+    }
+  }
+}
+
+# View AIC results
+print(bic_results)
+btc_BICresults <- bic_results
+
 
 # ------------------------------
 # Rolling 1-step-ahead GARCH Forecasts
 # ------------------------------
 
-# Load data
 ret_full <- returns_model_fitting$btc_full$day
 ret <- xts(ret_full$Return, order.by = ret_full$Time)
 split_date <- as.Date("2023-10-31")
@@ -228,13 +331,15 @@ split_date <- as.Date("2023-10-31")
 # Filter index of first prediction day (t+1)
 start_index <- which(index(ret) > split_date)[1]
 
-# Initialize forecast storage
+# Initialize storage
 forecast_dates <- index(ret)[start_index:length(ret)]
 forecast_values <- numeric(length(forecast_dates))
+arch_values <- numeric(length(forecast_dates))   # alpha1
+garch_values <- numeric(length(forecast_dates))  # beta1
 
-# Define model specification
+# Model specification
 garch_spec <- ugarchspec(
-  variance.model = list(model = "eGARCH", garchOrder = c(1, 1)),
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
   mean.model = list(armaOrder = c(1, 0)),
   distribution.model = "std"
 )
@@ -252,14 +357,45 @@ for (i in seq_along(forecast_dates)) {
   if (!is.null(fit)) {
     forecast <- ugarchforecast(fit, n.ahead = 1)
     forecast_values[i] <- sigma(forecast)[1]
+    
+    coef_vec <- coef(fit)
+    arch_values[i] <- as.numeric(fit@fit$coef["alpha1"])
+    garch_values[i] <- as.numeric(fit@fit$coef["beta1"])
   } else {
     forecast_values[i] <- NA
+    arch_values[i] <- NA
+    garch_values[i] <- NA
   }
 }
+
+# Combine all into a single dataframe
 garch_forecast_df <- data.frame(
   Date = forecast_dates,
-  Forecast = forecast_values
+  Forecast = forecast_values,
+  ARCH = arch_values,
+  GARCH = garch_values
 )
+
+ggplot(garch_forecast_df, aes(x = Date, y = ARCH)) +
+  geom_line(color = "blue") +
+  labs(
+    title = "Rolling ARCH Parameter (α₁) Over Time",
+    x = "Date",
+    y = "ARCH Parameter (α₁)"
+  ) +
+  theme_minimal()
+
+ggplot(garch_forecast_df, aes(x = Date, y = GARCH)) +
+  geom_line(color = "red") +
+  labs(
+    title = "Rolling GARCH Parameter (β₁) Over Time",
+    x = "Date",
+    y = "GARCH Parameter (β₁)"
+  ) +
+  theme_minimal()
+
+
+
 
 print(head(garch_forecast_df))
 write.csv(garch_forecast_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALSE)
@@ -291,6 +427,8 @@ write.csv(roll_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALS
 # ------------------------------
 # MS GARCH Fitting
 # ------------------------------
+ret <- returns_model_fitting$btc_train$day
+ret <- as.xts(ret)
 
 # Specify a two-regime sGARCH model with Student-t errors
 spec <- CreateSpec(
@@ -305,13 +443,52 @@ ar_resid <- residuals(ar_fit)
 
 # Fitting conditional variance model
 fit <- FitML(spec = spec, data = ar_resid)
+fc <- predict(fit, nahead = 100, do.return.draw = FALSE)
+fit$par
+# Params and matrix:
+fit
 
-# Show model summary
-summary(fit)
+# Extract log-likelihood
+llh <- fit$loglik
+
+# Extract number of parameters
+k <- length(fit$par)
+
+# Sample size
+n <- length(fit$data)
+
+# Compute AIC and BIC
+aic <- -2 * llh + 2 * k
+bic <- -2 * llh + log(n) * k
+
+# Extract standardized residuals
+
+sigma_t_ms <- Volatility(fit)
+z_ms <- as.numeric(ar_resid) / as.numeric(sigma_t_ms)
+
+ml_val <- Box.test(z_ms^2, lag = 30, type = "Ljung-Box")$p.value
+lb_val <- Box.test(z_ms, lag = 30, type = "Ljung-Box")$p.value
+
+
+plot(z_ms)
+acf(z_ms)
+acf(z_ms^2)
+
 
 # ------------------------------
 # Rolling 1-step-ahead MS-eGARCH Forecasts (residuals from AR(1))
 # ------------------------------
+ret <- returns_model_fitting$btc_full$day
+ret <- as.xts(ret)
+
+split_date <- as.Date("2023-10-31")
+
+# Filter index of first prediction day (t+1)
+start_index <- which(index(ret) > split_date)[1]
+
+# Initialize forecast storage
+forecast_dates <- index(ret)[start_index:length(ret)]
+forecast_values <- numeric(length(forecast_dates))
 
 # Define MS-eGARCH(1,1) specification with 2 regimes
 spec <- CreateSpec(
@@ -355,6 +532,7 @@ msGarch_forecasts <- data.frame(
   Sigma = sigma
 )
 
+
 print(head(msGarch_forecasts))
 write.csv(msGarch_forecasts, "forecasts/msgarch_forecasts_btc_daily.csv", row.names = FALSE)
 
@@ -375,7 +553,7 @@ spec_uni <- ugarchspec(
 fit_uni <- ugarchfit(spec = spec_uni, data = ret_xts)
 
 # Extract standardized residuals
-z_uni <- residuals(fit_uni, standardize = TRUE)
+z_uni <- residuals/sigma(fit_uni)
 
 # Forecast conditional mean and volatility
 fc_uni <- ugarchforecast(fit_uni, n.ahead = 1)
