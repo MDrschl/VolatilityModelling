@@ -127,7 +127,13 @@ coef(best_model)
 # ------------------------------
 # Fitting best model
 # ------------------------------
+retBTC <- returns_model_fitting$btc_train$day
+retETH <- returns_model_fitting$eth_train$day
 
+retBTC_xts <- xts(retBTC$Return, order.by = as.Date(retBTC$Time))
+retETH_xts <- xts(retETH$Return, order.by = as.Date(retETH$Time))
+multiReturns <- merge(retBTC_xts, retETH_xts)
+colnames(multiReturns) <- c("BTC", "ETH")
 
 spec <- dccspec(
   uspec = multispec(list(
@@ -141,8 +147,28 @@ spec <- dccspec(
   distribution = "mvt")
 
 fit <- dccfit(spec, data = multiReturns)
+
+# Params
 print(fit)
+
+# Output table
+bic <- -2*fit@mfit$llh + length(fit@mfit$coef)*log(length(ret))
+print(bic)
+aic <- -2*fit@mfit$llh + length(fit@mfit$coef)
+print(aic)
+llh <- fit@mfit$llh
+print(llh)
+
 plot(fit)
+
+
+
+
+
+
+
+
+
 correlation <- rcor(fit)
 
 
