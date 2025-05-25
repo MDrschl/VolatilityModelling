@@ -324,9 +324,10 @@ btc_BICresults <- bic_results
 # Rolling 1-step-ahead GARCH Forecasts
 # ------------------------------
 
-ret_full <- returns_model_fitting$btc_full$day
+ret_full <- returns_model_fitting$eth_full$`6 hours`
 ret <- xts(ret_full$Return, order.by = ret_full$Time)
-split_date <- as.Date("2023-10-31")
+#split_date <- as.Date("2023-10-31")
+split_date <- as.Date("2025-01-01")
 
 # Filter index of first prediction day (t+1)
 start_index <- which(index(ret) > split_date)[1]
@@ -334,12 +335,10 @@ start_index <- which(index(ret) > split_date)[1]
 # Initialize storage
 forecast_dates <- index(ret)[start_index:length(ret)]
 forecast_values <- numeric(length(forecast_dates))
-arch_values <- numeric(length(forecast_dates))   # alpha1
-garch_values <- numeric(length(forecast_dates))  # beta1
 
 # Model specification
 garch_spec <- ugarchspec(
-  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  variance.model = list(model = "eGARCH", garchOrder = c(1, 1)),
   mean.model = list(armaOrder = c(1, 0)),
   distribution.model = "std"
 )
@@ -359,46 +358,118 @@ for (i in seq_along(forecast_dates)) {
     forecast_values[i] <- sigma(forecast)[1]
     
     coef_vec <- coef(fit)
-    arch_values[i] <- as.numeric(fit@fit$coef["alpha1"])
-    garch_values[i] <- as.numeric(fit@fit$coef["beta1"])
   } else {
     forecast_values[i] <- NA
-    arch_values[i] <- NA
-    garch_values[i] <- NA
   }
 }
 
 # Combine all into a single dataframe
 garch_forecast_df <- data.frame(
   Date = forecast_dates,
-  Forecast = forecast_values,
-  ARCH = arch_values,
-  GARCH = garch_values
+  Forecast = forecast_values
 )
 
-ggplot(garch_forecast_df, aes(x = Date, y = ARCH)) +
-  geom_line(color = "blue") +
-  labs(
-    title = "Rolling ARCH Parameter (α₁) Over Time",
-    x = "Date",
-    y = "ARCH Parameter (α₁)"
-  ) +
-  theme_minimal()
-
-ggplot(garch_forecast_df, aes(x = Date, y = GARCH)) +
-  geom_line(color = "red") +
-  labs(
-    title = "Rolling GARCH Parameter (β₁) Over Time",
-    x = "Date",
-    y = "GARCH Parameter (β₁)"
-  ) +
-  theme_minimal()
-
-
-
-
 print(head(garch_forecast_df))
-write.csv(garch_forecast_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALSE)
+write.csv(garch_forecast_df, "forecasts/egarch_forecasts_eth_6h.csv", row.names = FALSE)
+
+
+### Looping for param trajectories
+ret_full <- returns_model_fitting$btc_full$`6 hours`
+ret <- xts(ret_full$Return, order.by = ret_full$Time)
+#split_date <- as.Date("2023-10-31")
+split_date <- as.Date("2025-01-01")
+
+# Filter index of first prediction day (t+1)
+start_index <- which(index(ret) > split_date)[1]
+
+# Initialize storage
+forecast_dates <- index(ret)[start_index:length(ret)]
+forecast_values <- numeric(length(forecast_dates))
+
+# Model specification
+garch_spec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 0)),
+  distribution.model = "std"
+)
+# Initialize storage
+forecast_values <- numeric(length(forecast_dates))
+arch_values <- numeric(length(forecast_dates))
+garch_values <- numeric(length(forecast_dates))
+arch_lower <- numeric(length(forecast_dates))
+arch_upper <- numeric(length(forecast_dates))
+garch_lower <- numeric(length(forecast_dates))
+garch_upper <- numeric(length(forecast_dates))
+
+for (i in seq_along(forecast_dates)) {
+  idx <- start_index + i - 1
+  ret_window <- ret[1:(idx - 1)]
+  
+  fit <- tryCatch(
+    ugarchfit(spec = garch_spec, data = ret_window, solver = "hybrid"),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(fit)) {
+    forecast <- ugarchforecast(fit, n.ahead = 1)
+    forecast_values[i] <- sigma(forecast)[1]
+    
+    coef_vec <- coef(fit)
+    se_vec <- sqrt(diag(vcov(fit)))
+    
+    alpha1 <- coef_vec["alpha1"]
+    beta1  <- coef_vec["beta1"]
+    se_alpha1 <- se_vec["alpha1"]
+    se_beta1  <- se_vec["beta1"]
+    
+    arch_values[i] <- alpha1
+    garch_values[i] <- beta1
+    
+    arch_lower[i] <- alpha1 - 1.96 * se_alpha1
+    arch_upper[i] <- alpha1 + 1.96 * se_alpha1
+    garch_lower[i] <- beta1 - 1.96 * se_beta1
+    garch_upper[i] <- beta1 + 1.96 * se_beta1
+  } else {
+    forecast_values[i] <- NA
+    arch_values[i] <- NA
+    garch_values[i] <- NA
+    arch_lower[i] <- NA
+    arch_upper[i] <- NA
+    garch_lower[i] <- NA
+    garch_upper[i] <- NA
+  }
+}
+garch_forecast_df <- data.frame(
+  Date = forecast_dates,
+  Forecast = forecast_values,
+  ARCH = arch_values,
+  ARCH_Lower = arch_lower,
+  ARCH_Upper = arch_upper,
+  GARCH = garch_values,
+  GARCH_Lower = garch_lower,
+  GARCH_Upper = garch_upper
+)
+
+ggplot(garch_forecast_df, aes(x = Date)) +
+  geom_ribbon(aes(ymin = ARCH_Lower, ymax = ARCH_Upper), fill = "skyblue", alpha = 0.3) +
+  geom_line(aes(y = ARCH), color = "blue") +
+  labs(
+    title = "Rolling Estimate of ARCH Parameter with 95% CI",
+    x = "Date",
+    y = expression(alpha[1])
+  ) +
+  theme_minimal()
+
+ggplot(garch_forecast_df, aes(x = Date)) +
+  geom_ribbon(aes(ymin = GARCH_Lower, ymax = GARCH_Upper), fill = "salmon", alpha = 0.3) +
+  geom_line(aes(y = GARCH), color = "red") +
+  labs(
+    title = "Rolling Estimate of GARCH Parameter with 95% CI",
+    x = "Date",
+    y = expression(beta[1])
+  ) +
+  theme_minimal()
+
 
 # Using the build in function
 
@@ -478,10 +549,10 @@ acf(z_ms^2)
 # ------------------------------
 # Rolling 1-step-ahead MS-eGARCH Forecasts (residuals from AR(1))
 # ------------------------------
-ret <- returns_model_fitting$btc_full$day
+ret <- returns_model_fitting$eth_full$`6 hours`
 ret <- as.xts(ret)
 
-split_date <- as.Date("2023-10-31")
+split_date <- as.Date("2025-01-01")
 
 # Filter index of first prediction day (t+1)
 start_index <- which(index(ret) > split_date)[1]
@@ -527,14 +598,14 @@ for (i in seq_along(forecast_dates)) {
 }
 
 # Create output
-msGarch_forecasts <- data.frame(
+msGarch_forecasts_6h <- data.frame(
   Date = forecast_dates,
   Sigma = sigma
 )
 
 
-print(head(msGarch_forecasts))
-write.csv(msGarch_forecasts, "forecasts/msgarch_forecasts_btc_daily.csv", row.names = FALSE)
+print(head(msGarch_forecasts_6h))
+write.csv(msGarch_forecasts_6h, "forecasts/msgarch_forecasts_eth_6h.csv", row.names = FALSE)
 
 # ------------------------------
 # Filtered Historical Simulation: AR-eGARCH (Univariate)
@@ -650,8 +721,8 @@ ar_resid <- residuals(ar_fit)
 
 # Step 2: Fit MS-eGARCH to residuals
 fit <- FitML(spec = spec, data = ar_resid)
-fit$
-sim <- simulate(object = fit, nsim = 1L, nahead = 10L,
+
+sim <- simulate(object = fit, nsim = 1L, nahead = 100L,
                 nburn = 500L)
 head(sim)
 plot(sim)
