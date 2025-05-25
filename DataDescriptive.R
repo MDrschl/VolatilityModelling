@@ -1,3 +1,8 @@
+#-----------
+# Set working directory
+#-----------
+setwd("/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub") # replace with own path 
+
 library(xts)
 library(tidyverse)
 library(lubridate)
@@ -178,7 +183,7 @@ n1.pacf <- function(x, max_lag = 20, main = "Partial Autocorrelation Function") 
 }
 
 #-----------
-# RV + volatility signature plot
+# RV + volatility signature plot — daily RV
 #-----------
 volatility_signature <- function(data, 
                                  asset_name = "BTC", 
@@ -267,6 +272,119 @@ volatility_signature <- function(data,
     
     abline(h = mean(colMeans(do.call(rbind, rv_list))[floor(max_interval / 2):max_interval]), col = "grey", lty = "dotted")
   }
+  
+  # ---------------
+  # RETURN RV VALUES
+  # ---------------
+  
+  result <- list()
+  result[[asset_name]] <- sapply(rv_list, function(x) x[1])  # Get the 1-minute RV for each day
+  return(result)
+  
+}
+
+#-----------
+# RV + volatility signature plot — 6-hourly RV
+#-----------
+volatility_signature_6h <- function(data, 
+                                 asset_name = "BTC", 
+                                 start_date = "2023-10-23", 
+                                 n_periods = 20, 
+                                 min_interval = 1, 
+                                 max_interval = 60, 
+                                 plot = TRUE){
+  
+  # ---------------
+  # Data cleaning
+  # ---------------
+  
+  start_datetime <- as.POSIXct(paste(start_date, "00:00:00"), tz = "UTC")
+  
+  period_datetime_list <- list()
+  for (p in 1:n_periods){ 
+    period_datetime_list[[p]] <- start_datetime + (p-1) * 6 * 3600  # 6 hours in seconds
+  }
+  
+  data_period <- list()
+  data_period_clean <- list()
+  data_period_formatted <- list()
+  
+  for (p in 1:n_periods){
+    
+    period_start <- period_datetime_list[[p]]
+    period_end <- period_start + 6 * 3600  # 6 hours later
+    
+    data_period[[p]] <- subset(data, `Open Time` >= period_start & `Open Time` < period_end)
+    
+    #    data_period_clean[[p]] <- data_period[[p]] %>%
+    #      group_by(`Open Time`) %>%
+    #      summarise(Close = last(Close), .groups = "drop")
+    
+    data_period_formatted[[p]] <- data_period[[p]] %>%
+      mutate(
+        Date = as.numeric(format(`Open Time`, "%Y%m%d")),
+        Hour = as.numeric(format(`Open Time`, "%H")),
+        Minute = as.numeric(format(`Open Time`, "%M")),
+        Second = as.numeric(format(`Open Time`, "%S")),
+        Volume = 1  # dummy value
+      ) %>%
+      select(Date, Hour, Minute, Second, Close, Volume)
+  }
+  
+  # ---------------
+  # RV calculation
+  # ---------------
+  
+  sequence_list <- list()
+  price_list <- list()
+  log_returns_list <- list()
+  rv_list <- list()
+  
+  for (p in 1:n_periods){
+    
+    sequence_list[[p]] <- list() 
+    price_list[[p]] <- list() 
+    log_returns_list[[p]] <- list() 
+    rv_list[[p]] <- numeric(max_interval - min_interval + 1)
+    
+    idx <- 1
+    for (i in min_interval:max_interval){
+      sequence_list[[p]][[idx]] <- seq(1, nrow(data_period_formatted[[p]]), by = i)      # List with vectors of indices
+      price_list[[p]][[idx]] <- data_period_formatted[[p]][sequence_list[[p]][[idx]],]   # List with prices vectors 
+      log_returns_list[[p]][[idx]] <- diff(log(price_list[[p]][[idx]][["Close"]]))       # List with log return vectors
+      rv_list[[p]][idx] <- sum((log_returns_list[[p]][[idx]])^2)                         # List with estimate Realized Variance (at each interval)
+      idx <- idx + 1
+    }
+  }
+  
+  # ---------------
+  # Plot
+  # ---------------
+  
+  if (plot) {
+    # Set fixed y-axis limits to match the image
+    ylim_values <- c(0.000, 0.001)
+    
+    plot(min_interval:max_interval, colMeans(do.call(rbind, rv_list)), type = "l", 
+         main = paste("Volatility signature plot:", asset_name,
+                      "\nFrom:", start_date, "for", n_periods, "6-hour periods"),
+         xlab = "Minutes",
+         ylab = "Sample RV",
+         col = "black", 
+         lwd = 1.5,
+         ylim = ylim_values)  # Added ylim parameter here
+    
+    abline(h = mean(colMeans(do.call(rbind, rv_list))[floor(max_interval / 2):max_interval]), col = "grey", lty = "dotted")
+  }
+  
+  # ---------------
+  # RETURN RV VALUES
+  # ---------------
+  
+  result <- list()
+  result[[asset_name]] <- sapply(rv_list, function(x) x[1])  # Get the 1-minute RV for each period
+  return(result)
+  
 }
 
 # -----------------------------------------------------------------------------
@@ -817,26 +935,56 @@ eth_rv_df <- data.frame(Date = rv_dates_eth, RV_1min = rv_values_eth)
 
 write_csv(eth_rv_df, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/eth_rv_df.csv")
 
+# ---------------
+# Calculate 6-hourly RV
+# ---------------
 
+# Check signature volatility plots for 2025
+# 2025
+start_dates_2025 <- seq(as.Date("2025-01-02"), by = "7 days", length.out = 16)
+n_periods_seq = c(28, 56, 84, 112)  # 7, 14, 21, 28 days worth of 6-hour periods
+for (start_date in start_dates_2025){
+  for (n_period in n_periods_seq){
+    volatility_signature_6h(btc_full, 
+                         asset_name = "BTC",
+                         start_date = as.Date(start_date),
+                         n_periods = n_period,
+                         min_interval = 1,
+                         max_interval = 60,
+                         plot = TRUE)
+  }
+}
 
+# Extract RV for test period
+# BTC
+btc_rv_6h <- volatility_signature_6h(btc_full,
+                               asset_name = "BTC",
+                               start_date = "2025-01-02",
+                               n_periods = 468,
+                               min_interval = 1,
+                               max_interval = 1,
+                               plot = FALSE)
 
+rv_values_btc_6h <- unlist(btc_rv_6h$BTC)
+rv_dates_btc_6h <- seq.POSIXt(from = as.POSIXct("2025-01-02 00:00:00", tz = "UTC"), by = "6 hours", length.out = 468)
+btc_rv_df_6h <- data.frame(DateTime = rv_dates_btc_6h, RV_1min = rv_values_btc_6h)
 
+write_csv(btc_rv_df_6h, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/btc_rv_df_6h.csv")
 
+# ETH
+eth_rv_6h <- volatility_signature_6h(eth_full,
+                                     asset_name = "ETH",
+                                     start_date = "2025-01-02",
+                                     n_periods = 468,
+                                     min_interval = 1,
+                                     max_interval = 1,
+                                     plot = FALSE)
 
+rv_values_eth_6h <- unlist(eth_rv_6h$ETH)
+rv_dates_eth_6h <- seq.POSIXt(from = as.POSIXct("2025-01-02 00:00:00", tz = "UTC"), by = "6 hours", length.out = 468)
+eth_rv_df_6h <- data.frame(DateTime = rv_dates_eth_6h, RV_1min = rv_values_eth_6h)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+write_csv(eth_rv_df_6h, "/Users/nathanielsuchin/Library/Mobile Documents/com~apple~CloudDocs/Documents/University/University St. Gallen/2025 Spring Semester/Financial Volatility/Group Assignment/GitHub/eth_rv_df_6h.csv")
 
 
 

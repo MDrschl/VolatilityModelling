@@ -237,6 +237,10 @@ mcs_test <- function(losses, alpha = 0.05, B = 1000, model_names = NULL) {
 # Code
 # -----------------------------------------------------------------------------
 
+# ----------------------------------------------------------
+# Daily
+# ----------------------------------------------------------
+
 # -----------------------------------------------
 # BTC
 # -----------------------------------------------
@@ -900,3 +904,445 @@ mcs_mse_manual_10_eth <- mcs_test(perf_mse_eth, alpha = 0.10, B = 500, model_nam
 cat("\nMCS for MSE (10% level):\n")
 cat("Models in MCS:", paste(model_names_eth[1:3][mcs_mse_manual_10_eth$MCS], collapse = ", "), "\n")
 cat("Models eliminated:", paste(model_names_eth[1:3][mcs_mse_manual_10_eth$eliminated], collapse = ", "), "\n")
+
+# ----------------------------------------------------------
+# 6-hourly Analysis
+# ----------------------------------------------------------
+
+# -----------------------------------------------
+# BTC 6-hourly
+# -----------------------------------------------
+
+# Load BTC 6-hourly realized variances
+btc_rv_df_6h <- read.csv("btc_rv_df_6h.csv")
+btc_rv_df_6h$DateTime <- as.POSIXct(btc_rv_df_6h$DateTime)
+
+# Convert realized variance sequence into realized volatility sequence
+btc_rv_df_6h$realized_vol <- sqrt(btc_rv_df_6h$RV_1min)
+
+# ------------------------------
+# Align data - BTC 6-hourly
+# ------------------------------
+
+# SGARCH (equivalent to GARCH(1,1))
+btc_vol_forecast_sgarch_6h <- read.csv("data/Forecasts/6_hourly/sgarch_forecasts_btc_6h.csv")
+btc_vol_forecast_sgarch_6h <- btc_vol_forecast_sgarch_6h[1:468, ]  # Keep only first 468 rows
+btc_vol_forecast_sgarch_6h <- data.frame(
+  DateTime = btc_rv_df_6h$DateTime,
+  forecast_vol = btc_vol_forecast_sgarch_6h[[2]]
+)
+
+# EGARCH
+btc_vol_forecast_egarch_6h <- read.csv("data/Forecasts/6_hourly/egarch_forecasts_btc_6h.csv")
+btc_vol_forecast_egarch_6h <- btc_vol_forecast_egarch_6h[1:468, ]  # Keep only first 468 rows
+btc_vol_forecast_egarch_6h <- data.frame(
+  DateTime = btc_rv_df_6h$DateTime,
+  forecast_vol = btc_vol_forecast_egarch_6h[[2]]
+)
+
+# MSGARCH
+btc_vol_forecast_msgarch_6h <- read.csv("data/Forecasts/6_hourly/msgarch_forecasts_btc_6h.csv")
+btc_vol_forecast_msgarch_6h <- btc_vol_forecast_msgarch_6h[1:468, ]  # Keep only first 468 rows
+btc_vol_forecast_msgarch_6h <- data.frame(
+  DateTime = btc_rv_df_6h$DateTime,
+  forecast_vol = btc_vol_forecast_msgarch_6h[[2]]
+)
+
+# Check data alignment
+length(btc_vol_forecast_sgarch_6h$DateTime) == length(btc_rv_df_6h$DateTime)
+length(btc_vol_forecast_egarch_6h$DateTime) == length(btc_rv_df_6h$DateTime)
+length(btc_vol_forecast_msgarch_6h$DateTime) == length(btc_rv_df_6h$DateTime)
+
+# Create list with all model forecasts
+forecast_list_btc_6h <- list(btc_vol_forecast_sgarch_6h,
+                             btc_vol_forecast_egarch_6h,
+                             btc_vol_forecast_msgarch_6h)
+
+# Define model names
+model_names_btc_6h <- c("SGARCH(1,1)", "EGARCH(1,1)", "MSGARCH(1,1)")
+
+# ------------------------------
+# Visual comparison - BTC 6-hourly
+# ------------------------------
+
+# Scatter plot comparison
+par(mfrow=c(1, 3), mar=c(5, 4, 2, 1), cex=0.7)
+for (i in 1:3){
+  plot(forecast_list_btc_6h[[i]]$forecast_vol, btc_rv_df_6h$realized_vol,
+       xlab = paste(model_names_btc_6h[i], "predictions"), 
+       ylab = "Volatility proxy (6h)",
+       main = "BTC 6-hourly")
+  abline(0, 1, lty = 3)  
+}
+par(mfrow=c(1, 1))
+
+# Time-series plot overlap
+par(mfrow=c(3, 1), mar=c(2, 4, 2, 1))
+for (i in 1:3){
+  plot(btc_rv_df_6h$DateTime, btc_rv_df_6h$realized_vol, type = "l", col = "grey",
+       xlab = "DateTime", ylab = "Volatility", 
+       main = paste("6h Volatility:", model_names_btc_6h[i], "Forecast vs. Realized (BTC)"))
+  lines(forecast_list_btc_6h[[i]]$DateTime, forecast_list_btc_6h[[i]]$forecast_vol, col = "blue")
+  
+  legend("topright",
+         legend = c("Realized Volatility", "Forecasted Volatility"),
+         col = c("grey", "blue"), lty = 1, bty = "n",
+         cex = 0.6, inset = c(0.01, 0.01))
+}
+par(mfrow=c(1, 1))
+
+# ------------------------------
+# Mincer-Zarnowitz (MZ) Regression Test - BTC 6-hourly
+# ------------------------------
+
+regression_results_btc_6h <- list()
+robust_se_btc_6h <- list()
+coefs_btc_6h <- list()
+t_alpha_btc_6h <- list()
+t_beta_btc_6h <- list()
+p_alpha_btc_6h <- list()
+p_beta_btc_6h <- list()
+
+for (i in 1:3){
+  regression_results_btc_6h[[i]] = lm(btc_rv_df_6h$realized_vol ~ forecast_list_btc_6h[[i]]$forecast_vol) 
+  robust_se_btc_6h[[i]] <- sqrt(diag(hccm(regression_results_btc_6h[[i]], type = "hc0")))
+  coefs_btc_6h[[i]] <- coef(regression_results_btc_6h[[i]])
+  t_alpha_btc_6h[[i]] <- coefs_btc_6h[[i]][1] / robust_se_btc_6h[[i]][1]
+  t_beta_btc_6h[[i]]  <- (coefs_btc_6h[[i]][2] - 1) / robust_se_btc_6h[[i]][2]
+  p_alpha_btc_6h[[i]] <- 2 * (1 - pt(abs(t_alpha_btc_6h[[i]]), df = regression_results_btc_6h[[i]]$df.residual))
+  p_beta_btc_6h[[i]]  <- 2 * (1 - pt(abs(t_beta_btc_6h[[i]]), df = regression_results_btc_6h[[i]]$df.residual))
+}
+
+# Summary table
+summary_table_mz_btc_6h <- matrix(NA, nrow = 4, ncol = 3)
+rownames(summary_table_mz_btc_6h) <- c("alpha (p-value)", "alpha t-stat", "beta (p-value)", "beta t-stat")
+colnames(summary_table_mz_btc_6h) <- model_names_btc_6h
+
+for (i in 1:3) {
+  alpha_val <- round(coefs_btc_6h[[i]][1], 4)
+  alpha_p   <- round(p_alpha_btc_6h[[i]], 4)
+  beta_val  <- round(coefs_btc_6h[[i]][2], 4)
+  beta_p    <- round(p_beta_btc_6h[[i]], 4)
+  
+  summary_table_mz_btc_6h[1, i] <- paste0(alpha_val, " (", alpha_p, ")")
+  summary_table_mz_btc_6h[2, i] <- round(t_alpha_btc_6h[[i]], 2)
+  summary_table_mz_btc_6h[3, i] <- paste0(beta_val, " (", beta_p, ")")
+  summary_table_mz_btc_6h[4, i] <- round(t_beta_btc_6h[[i]], 2)
+}
+
+summary_table_mz_btc_6h <- as.data.frame(summary_table_mz_btc_6h)
+cat("\n=== BTC 6-hourly MZ Regression Results ===\n")
+print(summary_table_mz_btc_6h)
+
+# ------------------------------
+# Superior predictive ability (SPA) - BTC 6-hourly
+# ------------------------------
+
+u_btc_6h <- cbind(
+  sgarch      = forecast_list_btc_6h[[1]]$forecast_vol,
+  egarch      = forecast_list_btc_6h[[2]]$forecast_vol,
+  msgarch     = forecast_list_btc_6h[[3]]$forecast_vol
+)
+
+n_btc_6h <- dim(u_btc_6h)[1]
+
+# QLIKE loss function
+perf_qlike_btc_6h <- matrix(,n_btc_6h,3)
+for (j in 1:3)
+{
+  perf_qlike_btc_6h[, j] <- -log(u_btc_6h[, j]) + btc_rv_df_6h$realized_vol / u_btc_6h[, j]
+}
+
+# MSE loss function
+perf_mse_btc_6h <- matrix(,n_btc_6h,3)
+for (j in 1:3)
+{
+  perf_mse_btc_6h[, j] <- abs(btc_rv_df_6h$realized_vol - u_btc_6h[, j])^2
+}
+
+perf_btc_6h <- list(perf_qlike_btc_6h, perf_mse_btc_6h)
+
+# Run SPA test
+cat("\n=== BTC 6-hourly SPA Test Results ===\n")
+for (loss_idx in 1:2){
+  cat("\n===========================\n")
+  cat("Loss function:", loss_names[loss_idx], "\n")
+  cat("===========================\n")
+  
+  for (k in 1:3){
+    cat("\nBenchmark model:", model_names_btc_6h[k], "\n")
+    
+    d = rep(0, 10000)
+    s = 1
+    
+    for (i in 1:10){ 
+      e = spa(per = perf_btc_6h[[loss_idx]], bench = k, m = 3, obs = n_btc_6h, q = 0.25, iter = 1000, periodogram = T)
+      d[s:(s+999)] = e$stat.boos
+      s = s + 1000
+    }
+    
+    p_value <- mean(d > e$stat)
+    cat("SPA p-value:", round(p_value, 4), "\n")
+  }
+}
+
+# Loss summary
+qlike_means_btc_6h <- colMeans(perf_qlike_btc_6h)
+mse_means_btc_6h <- colMeans(perf_mse_btc_6h)
+
+loss_summary_btc_6h <- data.frame(
+  Model = model_names_btc_6h,
+  QLIKE = round(qlike_means_btc_6h, 4),
+  MSE = round(mse_means_btc_6h, 6)
+)
+
+cat("\n=== BTC 6-hourly Loss Summary ===\n")
+print(loss_summary_btc_6h)
+
+# ------------------------------
+# Model confidence set (MCS) - BTC 6-hourly
+# ------------------------------
+
+cat("\n=== BTC 6-hourly MCS Results ===\n")
+# MCS for QLIKE
+cat("--- MCS for QLIKE Loss ---\n")
+mcs_qlike_btc_6h <- mcs_test(perf_qlike_btc_6h, alpha = 0.05, B = 500, model_names = model_names_btc_6h)
+cat("\nMCS for QLIKE (5% level):\n")
+cat("Models in MCS:", paste(model_names_btc_6h[mcs_qlike_btc_6h$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_btc_6h[mcs_qlike_btc_6h$eliminated], collapse = ", "), "\n")
+
+mcs_qlike_btc_6h_10 <- mcs_test(perf_qlike_btc_6h, alpha = 0.10, B = 500, model_names = model_names_btc_6h)
+cat("\nMCS for QLIKE (10% level):\n")
+cat("Models in MCS:", paste(model_names_btc_6h[mcs_qlike_btc_6h_10$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_btc_6h[mcs_qlike_btc_6h_10$eliminated], collapse = ", "), "\n")
+
+# MCS for MSE
+cat("\n--- MCS for MSE Loss ---\n")
+mcs_mse_btc_6h <- mcs_test(perf_mse_btc_6h, alpha = 0.05, B = 500, model_names = model_names_btc_6h)
+cat("\nMCS for MSE (5% level):\n")
+cat("Models in MCS:", paste(model_names_btc_6h[mcs_mse_btc_6h$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_btc_6h[mcs_mse_btc_6h$eliminated], collapse = ", "), "\n")
+
+mcs_mse_btc_6h_10 <- mcs_test(perf_mse_btc_6h, alpha = 0.10, B = 500, model_names = model_names_btc_6h)
+cat("\nMCS for MSE (10% level):\n")
+cat("Models in MCS:", paste(model_names_btc_6h[mcs_mse_btc_6h_10$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_btc_6h[mcs_mse_btc_6h_10$eliminated], collapse = ", "), "\n")
+
+# -----------------------------------------------
+# ETH 6-hourly
+# -----------------------------------------------
+
+# Load ETH 6-hourly realized variances
+eth_rv_df_6h <- read.csv("eth_rv_df_6h.csv")
+eth_rv_df_6h$DateTime <- as.POSIXct(eth_rv_df_6h$DateTime)
+
+# Convert realized variance sequence into realized volatility sequence
+eth_rv_df_6h$realized_vol <- sqrt(eth_rv_df_6h$RV_1min)
+
+# ------------------------------
+# Align data - ETH 6-hourly
+# ------------------------------
+
+# SGARCH (equivalent to GARCH(1,1))
+eth_vol_forecast_sgarch_6h <- read.csv("data/Forecasts/6_hourly/sgarch_forecasts_eth_6h.csv")
+eth_vol_forecast_sgarch_6h <- eth_vol_forecast_sgarch_6h[1:468, ]  # Keep only first 468 rows
+eth_vol_forecast_sgarch_6h <- data.frame(
+  DateTime = eth_rv_df_6h$DateTime,
+  forecast_vol = eth_vol_forecast_sgarch_6h[[2]]
+)
+
+# EGARCH
+eth_vol_forecast_egarch_6h <- read.csv("data/Forecasts/6_hourly/egarch_forecasts_eth_6h.csv")
+eth_vol_forecast_egarch_6h <- eth_vol_forecast_egarch_6h[1:468, ]  # Keep only first 468 rows
+eth_vol_forecast_egarch_6h <- data.frame(
+  DateTime = eth_rv_df_6h$DateTime,
+  forecast_vol = eth_vol_forecast_egarch_6h[[2]]
+)
+
+# MSGARCH
+eth_vol_forecast_msgarch_6h <- read.csv("data/Forecasts/6_hourly/msgarch_forecasts_eth_6h.csv")
+eth_vol_forecast_msgarch_6h <- eth_vol_forecast_msgarch_6h[1:468, ]  # Keep only first 468 rows
+eth_vol_forecast_msgarch_6h <- data.frame(
+  DateTime = eth_rv_df_6h$DateTime,
+  forecast_vol = eth_vol_forecast_msgarch_6h[[2]]
+)
+
+# Check data alignment
+length(eth_vol_forecast_sgarch_6h$DateTime) == length(eth_rv_df_6h$DateTime)
+length(eth_vol_forecast_egarch_6h$DateTime) == length(eth_rv_df_6h$DateTime)
+length(eth_vol_forecast_msgarch_6h$DateTime) == length(eth_rv_df_6h$DateTime)
+
+# Create list with all model forecasts
+forecast_list_eth_6h <- list(eth_vol_forecast_sgarch_6h,
+                             eth_vol_forecast_egarch_6h,
+                             eth_vol_forecast_msgarch_6h)
+
+# Define model names
+model_names_eth_6h <- c("SGARCH(1,1)", "EGARCH(1,1)", "MSGARCH(1,1)")
+
+# ------------------------------
+# Visual comparison - ETH 6-hourly
+# ------------------------------
+
+# Scatter plot comparison
+par(mfrow=c(1, 3), mar=c(5, 4, 2, 1), cex=0.7)
+for (i in 1:3){
+  plot(forecast_list_eth_6h[[i]]$forecast_vol, eth_rv_df_6h$realized_vol,
+       xlab = paste(model_names_eth_6h[i], "predictions"), 
+       ylab = "Volatility proxy (6h)",
+       main = "ETH 6-hourly")
+  abline(0, 1, lty = 3)  
+}
+par(mfrow=c(1, 1))
+
+# Time-series plot overlap
+par(mfrow=c(3, 1), mar=c(2, 4, 2, 1))
+for (i in 1:3){
+  plot(eth_rv_df_6h$DateTime, eth_rv_df_6h$realized_vol, type = "l", col = "grey",
+       xlab = "DateTime", ylab = "Volatility", 
+       main = paste("6h Volatility:", model_names_eth_6h[i], "Forecast vs. Realized (ETH)"))
+  lines(forecast_list_eth_6h[[i]]$DateTime, forecast_list_eth_6h[[i]]$forecast_vol, col = "blue")
+  
+  legend("topright",
+         legend = c("Realized Volatility", "Forecasted Volatility"),
+         col = c("grey", "blue"), lty = 1, bty = "n",
+         cex = 0.6, inset = c(0.01, 0.01))
+}
+par(mfrow=c(1, 1))
+
+# ------------------------------
+# Mincer-Zarnowitz (MZ) Regression Test - ETH 6-hourly
+# ------------------------------
+
+regression_results_eth_6h <- list()
+robust_se_eth_6h <- list()
+coefs_eth_6h <- list()
+t_alpha_eth_6h <- list()
+t_beta_eth_6h <- list()
+p_alpha_eth_6h <- list()
+p_beta_eth_6h <- list()
+
+for (i in 1:3){
+  regression_results_eth_6h[[i]] = lm(eth_rv_df_6h$realized_vol ~ forecast_list_eth_6h[[i]]$forecast_vol) 
+  robust_se_eth_6h[[i]] <- sqrt(diag(hccm(regression_results_eth_6h[[i]], type = "hc0")))
+  coefs_eth_6h[[i]] <- coef(regression_results_eth_6h[[i]])
+  t_alpha_eth_6h[[i]] <- coefs_eth_6h[[i]][1] / robust_se_eth_6h[[i]][1]
+  t_beta_eth_6h[[i]]  <- (coefs_eth_6h[[i]][2] - 1) / robust_se_eth_6h[[i]][2]
+  p_alpha_eth_6h[[i]] <- 2 * (1 - pt(abs(t_alpha_eth_6h[[i]]), df = regression_results_eth_6h[[i]]$df.residual))
+  p_beta_eth_6h[[i]]  <- 2 * (1 - pt(abs(t_beta_eth_6h[[i]]), df = regression_results_eth_6h[[i]]$df.residual))
+}
+
+# Summary table
+summary_table_mz_eth_6h <- matrix(NA, nrow = 4, ncol = 3)
+rownames(summary_table_mz_eth_6h) <- c("alpha (p-value)", "alpha t-stat", "beta (p-value)", "beta t-stat")
+colnames(summary_table_mz_eth_6h) <- model_names_eth_6h
+
+for (i in 1:3) {
+  alpha_val <- round(coefs_eth_6h[[i]][1], 4)
+  alpha_p   <- round(p_alpha_eth_6h[[i]], 4)
+  beta_val  <- round(coefs_eth_6h[[i]][2], 4)
+  beta_p    <- round(p_beta_eth_6h[[i]], 4)
+  
+  summary_table_mz_eth_6h[1, i] <- paste0(alpha_val, " (", alpha_p, ")")
+  summary_table_mz_eth_6h[2, i] <- round(t_alpha_eth_6h[[i]], 2)
+  summary_table_mz_eth_6h[3, i] <- paste0(beta_val, " (", beta_p, ")")
+  summary_table_mz_eth_6h[4, i] <- round(t_beta_eth_6h[[i]], 2)
+}
+
+summary_table_mz_eth_6h <- as.data.frame(summary_table_mz_eth_6h)
+cat("\n=== ETH 6-hourly MZ Regression Results ===\n")
+print(summary_table_mz_eth_6h)
+
+# ------------------------------
+# Superior predictive ability (SPA) - ETH 6-hourly
+# ------------------------------
+
+u_eth_6h <- cbind(
+  sgarch      = forecast_list_eth_6h[[1]]$forecast_vol,
+  egarch      = forecast_list_eth_6h[[2]]$forecast_vol,
+  msgarch     = forecast_list_eth_6h[[3]]$forecast_vol
+)
+
+n_eth_6h <- dim(u_eth_6h)[1]
+
+# QLIKE loss function
+perf_qlike_eth_6h <- matrix(,n_eth_6h,3)
+for (j in 1:3)
+{
+  perf_qlike_eth_6h[, j] <- -log(u_eth_6h[, j]) + eth_rv_df_6h$realized_vol / u_eth_6h[, j]
+}
+
+# MSE loss function
+perf_mse_eth_6h <- matrix(,n_eth_6h,3)
+for (j in 1:3)
+{
+  perf_mse_eth_6h[, j] <- abs(eth_rv_df_6h$realized_vol - u_eth_6h[, j])^2
+}
+
+perf_eth_6h <- list(perf_qlike_eth_6h, perf_mse_eth_6h)
+
+# Run SPA test
+cat("\n=== ETH 6-hourly SPA Test Results ===\n")
+for (loss_idx in 1:2){
+  cat("\n===========================\n")
+  cat("Loss function:", loss_names[loss_idx], "\n")
+  cat("===========================\n")
+  
+  for (k in 1:3){
+    cat("\nBenchmark model:", model_names_eth_6h[k], "\n")
+    
+    d = rep(0, 10000)
+    s = 1
+    
+    for (i in 1:10){ 
+      e = spa(per = perf_eth_6h[[loss_idx]], bench = k, m = 3, obs = n_eth_6h, q = 0.25, iter = 1000, periodogram = T)
+      d[s:(s+999)] = e$stat.boos
+      s = s + 1000
+    }
+    
+    p_value <- mean(d > e$stat)
+    cat("SPA p-value:", round(p_value, 4), "\n")
+  }
+}
+
+# Loss summary
+qlike_means_eth_6h <- colMeans(perf_qlike_eth_6h)
+mse_means_eth_6h <- colMeans(perf_mse_eth_6h)
+
+loss_summary_eth_6h <- data.frame(
+  Model = model_names_eth_6h,
+  QLIKE = round(qlike_means_eth_6h, 4),
+  MSE = round(mse_means_eth_6h, 6)
+)
+
+cat("\n=== ETH 6-hourly Loss Summary ===\n")
+print(loss_summary_eth_6h)
+
+# ------------------------------
+# Model confidence set (MCS) - ETH 6-hourly
+# ------------------------------
+
+cat("\n=== ETH 6-hourly MCS Results ===\n")
+# MCS for QLIKE
+cat("--- MCS for QLIKE Loss ---\n")
+mcs_qlike_eth_6h <- mcs_test(perf_qlike_eth_6h, alpha = 0.05, B = 500, model_names = model_names_eth_6h)
+cat("\nMCS for QLIKE (5% level):\n")
+cat("Models in MCS:", paste(model_names_eth_6h[mcs_qlike_eth_6h$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_eth_6h[mcs_qlike_eth_6h$eliminated], collapse = ", "), "\n")
+
+mcs_qlike_eth_6h_10 <- mcs_test(perf_qlike_eth_6h, alpha = 0.10, B = 500, model_names = model_names_eth_6h)
+cat("\nMCS for QLIKE (10% level):\n")
+cat("Models in MCS:", paste(model_names_eth_6h[mcs_qlike_eth_6h_10$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_eth_6h[mcs_qlike_eth_6h_10$eliminated], collapse = ", "), "\n")
+
+# MCS for MSE
+cat("\n--- MCS for MSE Loss ---\n")
+mcs_mse_eth_6h <- mcs_test(perf_mse_eth_6h, alpha = 0.05, B = 500, model_names = model_names_eth_6h)
+cat("\nMCS for MSE (5% level):\n")
+cat("Models in MCS:", paste(model_names_eth_6h[mcs_mse_eth_6h$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_eth_6h[mcs_mse_eth_6h$eliminated], collapse = ", "), "\n")
+
+mcs_mse_eth_6h_10 <- mcs_test(perf_mse_eth_6h, alpha = 0.10, B = 500, model_names = model_names_eth_6h)
+cat("\nMCS for MSE (10% level):\n")
+cat("Models in MCS:", paste(model_names_eth_6h[mcs_mse_eth_6h_10$MCS], collapse = ", "), "\n")
+cat("Models eliminated:", paste(model_names_eth_6h[mcs_mse_eth_6h_10$eliminated], collapse = ", "), "\n")
