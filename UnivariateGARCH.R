@@ -78,39 +78,182 @@ names(returns_model_fitting$eth_full) <- frequencies
 names(returns_model_fitting$eth_train) <- frequencies
 names(returns_model_fitting$eth_test) <- frequencies
 
+par(mfrow=c(2,2))
+acf(as.xts(returns_model_fitting$btc_train$day), main = "BTC Daily Returns")
+acf(as.xts(returns_model_fitting$eth_train$day), main = "ETH Daily Returns")
+acf(as.xts(returns_model_fitting$btc_train$day)^2, main = "BTC Daily Returns Squared")
+acf(as.xts(returns_model_fitting$eth_train$day)^2, main = "ETH Daily Returns Squared")
 
-# Select asset, select frequency, select, subset (train, test, full sample)
-ret <- returns_model_fitting$eth_train$day
+
+compute_stats <- function(r, name) {
+  vol_ann <- sd(r) * sqrt(252 * (1440 / name))
+  return(c(
+    "Mean" = round(mean(r),3),
+    "Ann. Vola." = round(vol_ann,3),
+    "Skew." = round(skewness(r), 3),
+    "Excess K." = round(kurtosis(r) - 3,3), 
+    "JB" = round(as.numeric(normalTest(r,method="jb")@test$statistic), 3)
+  ))
+}
+# Daily
+sum_stats_btc_ret_daily <- compute_stats(as.xts(returns_model_fitting$btc_train$day), 1440)
+sum_stats_eth_ret_daily <- compute_stats(as.xts(returns_model_fitting$eth_train$day), 1440) 
+
+# 6-hour
+sum_stats_btc_ret_6hourly <- compute_stats(as.xts(returns_model_fitting$btc_train$`6 hours`), 720)
+sum_stats_eth_ret_6hourly <- compute_stats(as.xts(returns_model_fitting$eth_train$`6 hours`), 720) 
+
+# 1-hour
+sum_stats_btc_ret_hourly <- compute_stats(as.xts(returns_model_fitting$btc_train$hour), 60)
+sum_stats_eth_ret_hourly <- compute_stats(as.xts(returns_model_fitting$eth_train$hour), 60) 
+
+# Print nice table with whole results
+summary_table <- rbind(
+  "BTC 24h" = sum_stats_btc_ret_daily,
+  "BTC 6h" = sum_stats_btc_ret_6hourly,
+  "BTC 1h" = sum_stats_btc_ret_hourly,
+  "ETH 24h" = sum_stats_eth_ret_daily,
+  "ETH 6h" = sum_stats_eth_ret_6hourly,
+  "ETH 1h" = sum_stats_eth_ret_hourly
+)
+
+print(summary_table)
+gamma=function(x,h)
+{
+  n=length(x)
+  h=abs(h)
+  x=x-mean(x)
+  gamma=sum(x[1:(n-h)]*x[(h+1):n])/n
+}
+
+rho=function(x,h)
+{
+  rho=gamma(x,h)/gamma(x,0)
+}
+
+
+gamma.asy=function(x,h) #Asymptotical cov. matrix of the sample autocorrelations
+{
+  n=length(x)
+  h=abs(h)
+  x=x-mean(x)
+  x2=x^2
+  gamma.asy<-matrix(,h,h)  
+  for (i in 1:h)
+  {
+    for (j in i:h)
+    {
+      gamma.asy[i,j]=gamma.asy[j,i]=sum(x[(j-i+1):(n-i)]*x[1:(n-j)]*x2[(j+1):n])/n
+    }
+  }
+  rho.asy=1/gamma(x,0)^2*gamma.asy
+  list(gamma.asy=gamma.asy,rho.asy=rho.asy)
+}
+
+#a=gamma.asy(microsoft,5)
+corr.Box.test=function(x,h) #Corrected portmanteau test under GARCH assumption
+{
+  n<-length(x)
+  a=gamma.asy(x,h)
+  acf.val=sapply(c(1:h),function(h) rho(x,h))
+  val=n*(acf.val%*%solve(a$rho.asy)%*%acf.val)
+  p_val = 1-pchisq(val,h)
+  return(c(val, p_val))
+}
+ret <- returns_model_fitting$btc_train$day
 ret <- as.xts(ret)
 
+Box.test(ret,lag=20,type="Ljung")
+corr.Box.test(ret,20)
+
+
+# Define metadata
+assets <- c("btc", "eth")
+frequencies <- c("day", "6 hours", "hour")
+lags <- c(10, 20)
+methods <- c("Q", "Q_star", "Q^2")  # Q = Ljung, Q_star = Corr, Q^2 = McLeod-Li
+
+# Initialize results table
+results_table <- expand.grid(
+  Asset = assets,
+  Frequency = frequencies,
+  Lag = lags,
+  stringsAsFactors = FALSE
+)
+
+# Initialize one column per method
+for (m in methods) {
+  results_table[[m]] <- NA_character_
+}
+
+# Updated test functions
+corr.Box.test <- function(x, h) {
+  n <- length(x)
+  a=gamma.asy(x,h)
+  acf.val <- sapply(c(1:h),function(h) rho(x,h))
+  val <- n*(acf.val%*%solve(a$rho.asy)%*%acf.val)
+  pval <- 1 - pchisq(val, h)
+  return(c(stat = as.numeric(val), pval = as.numeric(pval)))
+}
+
+# Fill table
+for (asset in assets) {
+  for (freq in frequencies) {
+    series_df <- returns_model_fitting[[paste0(asset, "_train")]][[freq]]
+    series_xts <- xts(series_df$Return, order.by = series_df$Time)
+    series_vec <- as.numeric(series_xts)
+    
+    for (lag in lags) {
+      ljung_test <- Box.test(series_vec, lag = lag, type = "Ljung-Box")
+      corr_test <- corr.Box.test(series_vec, lag)
+      mcleod_test <- Box.test(series_vec^2, lag = lag, type = "Ljung-Box")
+      
+      # Format: statistic (p-value)
+      Q_val <- sprintf("%.1f (%.2f)", ljung_test$statistic, ljung_test$p.value)
+      Q_star_val <- sprintf("%.1f (%.2f)", corr_test["stat"], corr_test["pval"])
+      Q2_val <- sprintf("%.1f (%.2f)", mcleod_test$statistic, mcleod_test$p.value)
+      
+      # Fill row
+      row_idx <- which(
+        results_table$Asset == asset &
+          results_table$Frequency == freq &
+          results_table$Lag == lag
+      )
+      results_table[row_idx, "Q"] <- Q_val
+      results_table[row_idx, "Q_star"] <- Q_star_val
+      results_table[row_idx, "Q^2"] <- Q2_val
+    }
+  }
+}
+
+
+results_wide <- pivot_wider(
+  results_table,
+  id_cols = c(Asset, Frequency),
+  names_from = Lag,
+  values_from = c(Q, Q_star, `Q^2`)
+)
+
+print(results_wide, row.names = FALSE)
+
+
+
+# Select asset, select frequency, select, subset (train, test, full sample)
+ret <- returns_model_fitting$btc_train
+ret <- as.xts(ret)
 
 max_p <- 1
 max_q <- 1
 max_r <- 3
 max_s <- 3
 
-plot_list <- list()
-
-
 results_table <- data.frame(
   Series = character(),
-  LLH = numeric(),
-  AIC = numeric(),
   BIC = numeric(),
   Model = character(),
   stringsAsFactors = FALSE
 )
-test_table <- data.frame(
-  Series = character(),
-  JB = numeric(),
-  BP = numeric(),
-  ML = numeric(),
-  LB = numeric(),
-  stringsAsFactors = FALSE
-)
-aic_matrices <- list()
-bic_matrices <- list()
-llh_matrices <- list()
+
 
 best_models <- list()
 
@@ -120,22 +263,12 @@ for (col in colnames(ret)) {
   
   
   best_model <- NULL
-  best_aic <- Inf
   best_bic <- Inf
-  best_ll <- -Inf
   best_order <- NULL
-  aic_matrix <- matrix(NA, nrow = max_p + 1, ncol = max_q + 1)
-  bic_matrix <- matrix(NA, nrow = max_p + 1, ncol = max_q + 1)
-  llh_matrix <- matrix(NA, nrow = max_p + 1, ncol = max_q + 1)
-  jb_val <- NA
-  bp_val <- NA
-  ml_val <- NA
-  lb_val <- NA
+
   
-  for (p in 0:max_p) {
-    for (q in 0:max_q) {
-      for (r in 0:max_r) {
-        for (s in 0:max_s) {
+  for (r in 0:max_r) {
+    for (s in 0:max_s) {
           
           if (r == 0 && s == 0) {
             next
@@ -143,57 +276,32 @@ for (col in colnames(ret)) {
           
           
           spec <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(r, s)),
-                             mean.model = list(armaOrder = c(p, q)),
+                             mean.model = list(armaOrder = c(1, 0)),
                              distribution.model = "std")
           fit <- tryCatch(ugarchfit(spec, series), error = function(e) NULL)
           
           if (!is.null(fit)) {
-            aic <- -2*fit@fit$LLH + length(fit@fit$coef)
-            bic <- -2*fit@fit$LLH + length(fit@fit$coef)*log(length(series))
-            ll <- fit@fit$LLH
+            llh <- fit@fit$LLH
+            bic <- -2*llh + length(fit@fit$coef)*log(length(series))
             
-            aic_matrix[p + 1, q + 1] <- aic
-            bic_matrix[p + 1, q + 1] <- bic
-            llh_matrix[p + 1, q + 1] <- ll
+            order <- paste("ARMA-GARCH(", 1, ",", 0, ";", r, ",", s, ")", sep = "")
             
-            order <- paste("ARMA-GARCH(", p, ",", q, ";", r, ",", s, ")", sep = "")
-            
-            if (aic < best_aic) {
+            if (bic < best_bic) {
               best_model <- fit
-              best_aic <- aic
               best_bic <- bic
-              best_ll <- ll
               best_order <- order
-              jb_val <- jarque.bera.test(best_model@fit$z)$statistic
-              bp_val <- Box.test(best_model@fit$z^2, lag = 20, type = "Box-Pierce")$p.value
-              ml_val <- Box.test(best_model@fit$z^2, lag = 30, type = "Ljung-Box")$p.value
-              lb_val <- Box.test(best_model@fit$z, lag = 30, type = "Ljung-Box")$p.value
             }
           }
-        }
       }
-    }
   }
-  
-  aic_matrices[[col]] <- aic_matrix
-  bic_matrices[[col]] <- bic_matrix
-  llh_matrices[[col]] <- llh_matrix
+
   
   best_models[[col]] <- best_model
   
   results_table <- rbind(results_table, data.frame(
     Series = col,
-    LLH = best_ll,
-    AIC = best_aic,
     BIC = best_bic,
     Model = best_order
-  ))
-  test_table <- rbind(test_table, data.frame(
-    Series = col,
-    JB = jb_val,
-    BP = bp_val,
-    ML = ml_val,
-    LB = lb_val
   ))
 }
 results_table
@@ -212,16 +320,19 @@ if (!is.null(best_fit)) {
 # ------------------------------
 
 # Select frequ and asset
-ret <- returns_model_fitting$eth_train$`6 hours`
+ret <- returns_model_fitting$eth_train$day
 ret <- as.xts(ret)
 
 
 # Simple example using an ARMA (1,0) GARCH (1,1) for the BTC return series
-model <- ugarchspec(variance.model = list(model = "gjrGARCH", garchOrder = c(2, 2)),
+model <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
                     mean.model = list(armaOrder = c(1, 0)),
                     distribution.model = "std")
 fit <- ugarchfit(spec = model, data = ret)
+sqrt(diag(vcov(fit)))[4]
+sqrt(diag(vcov(fit)))[5]
 
+fit@fit$cvar
 # Params
 print(fit)
 
@@ -324,7 +435,7 @@ btc_BICresults <- bic_results
 # Rolling 1-step-ahead GARCH Forecasts
 # ------------------------------
 
-ret_full <- returns_model_fitting$eth_full$`6 hours`
+ret_full <- returns_model_fitting$btc_full$`6 hours`
 ret <- xts(ret_full$Return, order.by = ret_full$Time)
 #split_date <- as.Date("2023-10-31")
 split_date <- as.Date("2025-01-01")
@@ -338,7 +449,7 @@ forecast_values <- numeric(length(forecast_dates))
 
 # Model specification
 garch_spec <- ugarchspec(
-  variance.model = list(model = "eGARCH", garchOrder = c(1, 1)),
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 2)),
   mean.model = list(armaOrder = c(1, 0)),
   distribution.model = "std"
 )
@@ -362,7 +473,33 @@ for (i in seq_along(forecast_dates)) {
     forecast_values[i] <- NA
   }
 }
+# Combine all into a single dataframe
+garch_forecast_df <- data.frame(
+  Date = forecast_dates,
+  Forecast = forecast_values
+)
+print(head(garch_forecast_df))
+write.csv(garch_forecast_df, "forecasts/sgarch_forecasts_btc_6h.csv", row.names = FALSE)
 
+# Rolling forecast using only the last 800 observations
+for (i in seq_along(forecast_dates)) {
+  idx <- start_index + i - 1
+  window_end <- idx - 1
+  window_start <- max(1, window_end - 799)
+  ret_window <- ret[window_start:window_end]
+  
+  fit <- tryCatch(
+    ugarchfit(spec = garch_spec, data = ret_window, solver = "hybrid"),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(fit)) {
+    forecast <- ugarchforecast(fit, n.ahead = 1)
+    forecast_values[i] <- sigma(forecast)[1]
+  } else {
+    forecast_values[i] <- NA
+  }
+}
 # Combine all into a single dataframe
 garch_forecast_df <- data.frame(
   Date = forecast_dates,
@@ -370,14 +507,14 @@ garch_forecast_df <- data.frame(
 )
 
 print(head(garch_forecast_df))
-write.csv(garch_forecast_df, "forecasts/egarch_forecasts_eth_6h.csv", row.names = FALSE)
+write.csv(garch_forecast_df, "forecasts/egarch_forecasts_btc_1h.csv", row.names = FALSE)
 
 
 ### Looping for param trajectories
-ret_full <- returns_model_fitting$btc_full$`6 hours`
+ret_full <- returns_model_fitting$btc_full$day
 ret <- xts(ret_full$Return, order.by = ret_full$Time)
-#split_date <- as.Date("2023-10-31")
-split_date <- as.Date("2025-01-01")
+split_date <- as.Date("2023-10-31")
+#split_date <- as.Date("2025-01-01")
 
 # Filter index of first prediction day (t+1)
 start_index <- which(index(ret) > split_date)[1]
@@ -415,12 +552,11 @@ for (i in seq_along(forecast_dates)) {
     forecast_values[i] <- sigma(forecast)[1]
     
     coef_vec <- coef(fit)
-    se_vec <- sqrt(diag(vcov(fit)))
-    
+
     alpha1 <- coef_vec["alpha1"]
     beta1  <- coef_vec["beta1"]
-    se_alpha1 <- se_vec["alpha1"]
-    se_beta1  <- se_vec["beta1"]
+    se_alpha1 <- sqrt(diag(vcov(fit)))[4]
+    se_beta1  <- sqrt(diag(vcov(fit)))[4]
     
     arch_values[i] <- alpha1
     garch_values[i] <- beta1
