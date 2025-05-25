@@ -336,6 +336,7 @@ model_names_btc <- c("GARCH(1,1)", "EGARCH(1,1)", "MSGARCH(1,1)", "DCC-GARCH(1,1
 # ------------------------------
 
 # Scatter plot comparison
+
 for (i in 1:4){
   plot(forecast_list_btc[[i]]$forecast_vol, btc_rv_df$realized_vol,
       xlab = paste(model_names_btc[i], " predictions"), 
@@ -343,6 +344,23 @@ for (i in 1:4){
       main = "BTC")
   abline(0, 1, lty = 3)  
 }
+
+
+
+# Set up the plotting area for 1 row and 4 columns
+par(mfrow=c(1, 4))
+
+# Your plotting loop
+for (i in 1:4){
+  plot(forecast_list_btc[[i]]$forecast_vol, btc_rv_df$realized_vol,
+       xlab = paste(model_names_btc[i], " predictions"), 
+       ylab = "Volatility proxy",
+       main = "BTC")
+  abline(0, 1, lty = 3)  
+}
+
+# Reset to default single plot
+par(mfrow=c(1, 1))
 
 # Time-series plot overlap
 for (i in 1:4){
@@ -355,6 +373,28 @@ for (i in 1:4){
          col = c("grey", "blue"), lty = 1, bty = "n",
          cex = 0.6, inset = c(0.01, 0.01))
 }
+
+
+
+# Solution 1: Reduce margins significantly
+par(mfrow=c(4, 1), mar=c(2, 4, 2, 1))  # smaller margins: bottom, left, top, right
+
+# Time-series plot overlap
+for (i in 1:4){
+  plot(btc_rv_df$Date, btc_rv_df$realized_vol, type = "l", col = "grey",
+       xlab = "Date", ylab = "Volatility", main = paste("Volatility:", model_names_btc[i], " Forecast vs. Realized (BTC)"))
+  lines(forecast_list_btc[[i]]$Date, forecast_list_btc[[i]]$forecast_vol, col = "blue")
+  
+  legend("topright",
+         legend = c("Realized Volatility", "Forecasted Volatility"),
+         col = c("grey", "blue"), lty = 1, bty = "n",
+         cex = 0.6, inset = c(0.01, 0.01))
+}
+
+par(mfrow=c(1, 1))
+
+
+
 
 # ------------------------------
 # Mincer-Zarnowitz (MZ) Regression Test
@@ -486,6 +526,20 @@ for (loss_idx in 1:2){
     cat("SPA p-value:", round(p_value, 4), "\n")
   }
 }
+
+# Calculate mean loss values
+qlike_means_btc <- colMeans(perf_qlike)
+mse_means_btc <- colMeans(perf_mse)
+
+# Create a summary table with full precision for MSE
+loss_summary_btc <- data.frame(
+  Model = model_names_btc[1:3],  # Only first 3 models since DCC is commented out
+  QLIKE = round(qlike_means_btc, 4),
+  MSE = round(mse_means_btc, 6)  # 6 decimal places for MSE
+)
+
+# Display the table
+print(loss_summary_btc)
 
 # ------------------------------
 # Model confidence set (MCS)
@@ -621,6 +675,18 @@ for (i in 1:4){
   abline(0, 1, lty = 3)  
 }
 
+# Scatter plot comparison - 4 plots side by side
+par(mfrow=c(1, 4), mar=c(5, 4, 2, 1), cex=0.7)  # Increased bottom margin, smaller text
+
+for (i in 1:4){
+  plot(forecast_list_eth[[i]]$forecast_vol, eth_rv_df$realized_vol,
+       xlab = paste(model_names_eth[i], "predictions"), 
+       ylab = "Volatility proxy",
+       main = "ETH")
+  abline(0, 1, lty = 3)  
+}
+par(mfrow=c(1, 1))  # Reset to default
+
 # Time-series plot overlap
 for (i in 1:4){
   plot(eth_rv_df$Date, eth_rv_df$realized_vol, type = "l", col = "grey",
@@ -632,6 +698,23 @@ for (i in 1:4){
          col = c("grey", "blue"), lty = 1, bty = "n",
          cex = 0.6, inset = c(0.01, 0.01))
 }
+
+# Time-series plot overlap - 4 plots stacked vertically
+par(mfrow=c(4, 1), mar=c(2, 4, 2, 1))  # Reduced margins to avoid "margins too large" error
+
+for (i in 1:4){
+  plot(eth_rv_df$Date, eth_rv_df$realized_vol, type = "l", col = "grey",
+       xlab = "Date", ylab = "Volatility", main = paste("Volatility:", model_names_eth[i], " Forecast vs. Realized (ETH)"))
+  lines(forecast_list_eth[[i]]$Date, forecast_list_eth[[i]]$forecast_vol, col = "blue")
+  
+  legend("topright",
+         legend = c("Realized Volatility", "Forecasted Volatility"),
+         col = c("grey", "blue"), lty = 1, bty = "n",
+         cex = 0.6, inset = c(0.01, 0.01))
+}
+
+par(mfrow=c(1, 1))  # Reset to default
+
 
 # ------------------------------
 # Mincer-Zarnowitz (MZ) Regression Test
@@ -763,6 +846,29 @@ for (loss_idx in 1:2){
     cat("SPA p-value:", round(p_value, 4), "\n")
   }
 }
+
+# Calculate mean loss values
+qlike_means_eth <- colMeans(perf_qlike_eth)
+mse_means_eth <- colMeans(perf_mse_eth)
+
+# Create a summary table with more decimal places for MSE
+loss_summary_eth <- data.frame(
+  Model = model_names_eth[1:3],
+  QLIKE = round(qlike_means_eth, 4),
+  MSE = mse_means_eth  # Don't round MSE
+)
+
+# Display with full precision
+print(loss_summary_eth)
+
+# Or if you want specific decimal places for MSE
+loss_summary_eth <- data.frame(
+  Model = model_names_eth[1:3],
+  QLIKE = round(qlike_means_eth, 4),
+  MSE = round(mse_means_eth, 6)  # 6 decimal places
+)
+
+print(loss_summary_eth)
 
 # ------------------------------
 # Model confidence set (MCS)
