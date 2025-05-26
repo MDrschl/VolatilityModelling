@@ -634,7 +634,7 @@ write.csv(roll_df, "forecasts/rolling_forecasts_btc_daily.csv", row.names = FALS
 # ------------------------------
 # MS GARCH Fitting
 # ------------------------------
-ret <- returns_model_fitting$btc_train$day
+ret <- returns_model_fitting$eth_train$day
 ret <- as.xts(ret)
 
 # Specify a two-regime sGARCH model with Student-t errors
@@ -650,10 +650,7 @@ ar_resid <- residuals(ar_fit)
 
 # Fitting conditional variance model
 fit <- FitML(spec = spec, data = ar_resid)
-fc <- predict(fit, nahead = 100, do.return.draw = FALSE)
-
 print(fit)
-
 # Extract log-likelihood
 llh <- fit$loglik
 
@@ -688,11 +685,12 @@ scaling_factors <- ifelse(states == 1,
 # Final standardized residuals
 z_ms <- (as.numeric(ar_resid) / sigma_t) * scaling_factors
 
-
 ml_val <- Box.test(z_ms^2, lag = 30, type = "Ljung-Box")$p.value
+print(ml_val)
 lb_val <- Box.test(z_ms, lag = 30, type = "Ljung-Box")$p.value
+print(lb_val)
 
-
+par(mfrow=c(1,1))
 qqplot(qt(ppoints(length(z_ms)), df = df), z_ms,
        main = "Q-Q Plot vs Student-t Distribution",
        xlab = "Theoretical Quantiles (t-distribution)",
