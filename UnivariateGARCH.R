@@ -320,7 +320,7 @@ if (!is.null(best_fit)) {
 # ------------------------------
 
 # Select frequ and asset
-ret <- returns_model_fitting$eth_train$day
+ret <- returns_model_fitting$btc_train$day
 ret <- as.xts(ret)
 
 
@@ -651,9 +651,8 @@ ar_resid <- residuals(ar_fit)
 # Fitting conditional variance model
 fit <- FitML(spec = spec, data = ar_resid)
 fc <- predict(fit, nahead = 100, do.return.draw = FALSE)
-fit$par
-# Params and matrix:
-fit
+
+print(fit)
 
 # Extract log-likelihood
 llh <- fit$loglik
@@ -668,15 +667,37 @@ n <- length(fit$data)
 aic <- -2 * llh + 2 * k
 bic <- -2 * llh + log(n) * k
 
-# Extract standardized residuals
+# Residuals from AR(1) mean model
+ar_resid <- residuals(arima(ret, order = c(1, 0, 0), include.mean = TRUE))
 
-sigma_t_ms <- Volatility(fit)
-z_ms <- as.numeric(ar_resid) / as.numeric(sigma_t_ms)
+# Volatility estimates (regime-specific)
+sigma_t <- as.numeric(Volatility(fit))  # vector of length T
+
+# Most likely regime at each t (1 or 2)
+states <- State(fit)$Viterbi
+
+# Extract estimated degrees of freedom
+nu_1 <- fit$par["nu_1"]
+nu_2 <- fit$par["nu_2"]
+
+# Compute rescaling factor per t based on regime
+scaling_factors <- ifelse(states == 1,
+                          sqrt(nu_1 / (nu_1 - 2)),
+                          sqrt(nu_2 / (nu_2 - 2)))
+
+# Final standardized residuals
+z_ms <- (as.numeric(ar_resid) / sigma_t) * scaling_factors
+
 
 ml_val <- Box.test(z_ms^2, lag = 30, type = "Ljung-Box")$p.value
 lb_val <- Box.test(z_ms, lag = 30, type = "Ljung-Box")$p.value
 
 
+qqplot(qt(ppoints(length(z_ms)), df = df), z_ms,
+       main = "Q-Q Plot vs Student-t Distribution",
+       xlab = "Theoretical Quantiles (t-distribution)",
+       ylab = "Standardized Residuals")
+abline(0,1)
 plot(z_ms)
 acf(z_ms)
 acf(z_ms^2)
